@@ -18,7 +18,9 @@
 
 #include "leds.h"
 
-#include <main.h>
+#include "main.h"
+
+//#include "com_api.h"
 
 
 messagebus_t bus;
@@ -27,6 +29,8 @@ CONDVAR_DECL(bus_condvar);
 
 int main(void)
 {
+	msg_t new;
+
     halInit();
     chSysInit();
     mpu_init();

@@ -10,10 +10,18 @@ GLOBAL_PATH = ../e-puck2_main-processor
 
 #Source files to include
 CSRC += ./main.c \
+		./source/com_api.c \
+		./source/com_CAN_heartbeat.c \
+		./source/com_CAN_input.c \
+		./source/com_CAN_output.c \
+		./source/com_input_buffer.c \
+		./source/com_main.c \
+		./source/com_osal.c \
+		./source/com_output_buffer.c \
 		
 
 #Header folders to include
-INCDIR += 
+INCDIR += ./header
 
 #Jump to the main Makefile
 include $(GLOBAL_PATH)/Makefile
