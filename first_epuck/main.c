@@ -20,8 +20,8 @@
 
 #include "main.h"
 
-//#include "com_api.h"
-
+#include "com_api.h"
+#include "com_output_buffer.h"
 
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
@@ -35,14 +35,42 @@ int main(void)
     chSysInit();
     mpu_init();
 
+    com_init();
+
     /** Inits the Inter Process Communication bus. */
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
+
+	uint8_t data[10] = {0,1,2,3,4,5,6,7,8,9 };
+
+	for(uint8_t i = 0; i<10; i++)
+	{
+		com_output_buffer_write_data(i,0x1234,i, &data);
+		//data += i;
+	}
+
+	uint8_t msg_id;
+	uint16_t timestamp;
+	uint8_t length;
+
+	length = com_output_buffer_get_next_length();
+
+	for(uint8_t i = 0; i<10; i++)
+		data[i] = 0;
+
+	for(uint8_t i = 0; i<10; i++)
+	{
+
+		length = com_output_buffer_read_data(&msg_id, &timestamp, &data);
+		com_output_buffer_write_data(msg_id,timestamp, length, &data);
+	}
+
 
     while (1) {
 
         palTogglePad(GPIOD, GPIOD_LED_FRONT);
         chThdSleepMilliseconds(1000);
     }
+    return 0;
 }
 
 #define STACK_CHK_GUARD 0xe2dee396

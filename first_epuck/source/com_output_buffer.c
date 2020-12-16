@@ -10,24 +10,26 @@
 
 #include "configuration.h"
 
-static uint8_t buffer[2*BURST_LENGTH];
+#define OUT_BUF_SIZE		2*BURST_LENGTH
 
-static queue_t outputQueue;
+static uint8_t buffer[OUT_BUF_SIZE];
+
+static queue_t outputQueue = {.size = OUT_BUF_SIZE};
 
 
 void com_output_buffer_init(void)
 {
-	outputQueue.data = buffer;
-	outputQueue.size = 2*BURST_LENGTH ;
-
 	outputQueue.head = 0;
 	outputQueue.tail = 0 ;
 	outputQueue.filledBytes = 0;
+
+	outputQueue.data = buffer;
 }
 
 uint8_t com_output_buffer_write_data(uint8_t contentId, uint16_t timestamp, uint8_t length, uint8_t* data)
 {
-	if(	!queue_write(&outputQueue, 1, &contentId) ||
+	if(	(outputQueue.size-outputQueue.filledBytes < 4+length) ||
+		!queue_write(&outputQueue, 1, &contentId) ||
 		!queue_write(&outputQueue, 2, &timestamp) ||
 		!queue_write(&outputQueue, 1, &length) ||
 		!queue_write(&outputQueue, length, data) )
@@ -39,8 +41,9 @@ uint8_t com_output_buffer_write_data(uint8_t contentId, uint16_t timestamp, uint
 uint8_t com_output_buffer_read_data(uint8_t* contentId, uint16_t* timestamp, uint8_t* data)
 {
 	uint8_t length;
-	if(	!queue_read(&outputQueue, 1, &contentId) ||
-		!queue_read(&outputQueue, 2, &timestamp) ||
+	if(	(outputQueue.filledBytes < 4+length) ||
+		!queue_read(&outputQueue, 1, contentId) ||
+		!queue_read(&outputQueue, 2, timestamp) ||
 		!queue_read(&outputQueue, 1, &length) ||
 		!queue_read(&outputQueue, length, data))
 		return 0 ;

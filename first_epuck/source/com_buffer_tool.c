@@ -12,11 +12,14 @@
 
 uint8_t queue_read(queue_t *queue, uint8_t nbBytes, uint8_t* data)
 {
-    if (queue->tail+nbBytes-1 >= queue->head) {
-        return false;
-    }
+	if ( (nbBytes > queue->head - queue->tail && queue->head >= queue->tail) ||
+		 (nbBytes > queue->head + queue->size - queue->tail && queue->head < queue->tail)) {
+		return false;
+	}
 
-    for(uint8_T i = 0; i<nbBytes; i++)
+    uint8_t n = 0;
+
+    for(uint8_t i = 0; i<nbBytes; i++)
     {
     	data[i] = queue->data[queue->tail];
     	queue->data[queue->tail] = 0x00;
@@ -25,7 +28,7 @@ uint8_t queue_read(queue_t *queue, uint8_t nbBytes, uint8_t* data)
     }
     queue->filledBytes = queue->head>=queue->tail?
 							queue->head-queue->tail:
-							queue->head-queue->head+queue->size;
+							queue->head-queue->tail+queue->size;
 
     return true;
 }
@@ -36,7 +39,7 @@ uint8_t queue_scan(queue_t * queue, uint8_t nbBytes, uint8_t offset, uint8_t* da
 		return false;
 	}
 
-	for(uint8_T i = 0; i<nbBytes; i++)
+	for(uint8_t i = 0; i<nbBytes; i++)
 		data[i] = queue->data[queue->tail+offset+i];
 
 	return true;
@@ -44,8 +47,8 @@ uint8_t queue_scan(queue_t * queue, uint8_t nbBytes, uint8_t offset, uint8_t* da
 
 uint8_t queue_write(queue_t *queue, uint8_t nbBytes, uint8_t* data)
 {
-    if ( (nbBytes > queue->head - queue->tail && queue->head >= queue->tail) ||
-    	 (nbBytes > queue->head - queue->tail + queue->size && queue->head < queue->tail)) {
+    if ( (nbBytes > queue->tail + queue->size - queue->head && queue->head >= queue->tail) ||
+    	 (nbBytes > queue->tail - queue->head && queue->head < queue->tail)) {
         return false;
     }
     for(uint8_t i = 0; i<nbBytes; i++)
@@ -56,7 +59,7 @@ uint8_t queue_write(queue_t *queue, uint8_t nbBytes, uint8_t* data)
 
     queue->filledBytes = queue->head>=queue->tail?
     						queue->head-queue->tail:
-    						queue->head-queue->head+queue->size;
+    						queue->head-queue->tail+queue->size;
 
     return true;
 }

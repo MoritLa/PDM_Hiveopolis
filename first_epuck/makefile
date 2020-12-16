@@ -10,6 +10,7 @@ GLOBAL_PATH = ../e-puck2_main-processor
 
 #Source files to include
 CSRC += ./main.c \
+		./source/com_buffer_tool.c \
 		./source/com_api.c \
 		./source/com_CAN_heartbeat.c \
 		./source/com_CAN_input.c \

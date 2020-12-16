@@ -9,11 +9,12 @@
 #define HEADER_COM_BUFFER_TOOL_H_
 
 #include <stdlib.h>
+#include "com_osal.h"
 
 typedef struct {
     size_t head;
     size_t tail;
-    size_t size;
+    const size_t size;
     uint8_t filledBytes;
     uint8_t* data;
 } queue_t;
