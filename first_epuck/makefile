@@ -7,22 +7,19 @@ PROJECT = first_epuck
 
 #Define path to the e-puck2_main-processor folder
 GLOBAL_PATH = ../e-puck2_main-processor
+COM_PATH = ../com_protocol
 
 #Source files to include
 CSRC += ./main.c \
-		./source/com_buffer_tool.c \
-		./source/com_api.c \
-		./source/com_CAN_heartbeat.c \
-		./source/com_CAN_input.c \
-		./source/com_CAN_output.c \
-		./source/com_input_buffer.c \
-		./source/com_main.c \
-		./source/com_osal.c \
-		./source/com_output_buffer.c \
 		
 
 #Header folders to include
-INCDIR += ./header
+INCDIR += 
+
+USE_OPT += -DCHIBIOS
+
+#Add source of Comunication protocol
+include $(COM_PATH)/com.mk
 
 #Jump to the main Makefile
 include $(GLOBAL_PATH)/Makefile

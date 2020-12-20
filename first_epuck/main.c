@@ -29,7 +29,7 @@ CONDVAR_DECL(bus_condvar);
 
 int main(void)
 {
-	msg_t new;
+	//msg_t new;
 
     halInit();
     chSysInit();
@@ -44,7 +44,7 @@ int main(void)
 
 	for(uint8_t i = 0; i<10; i++)
 	{
-		com_output_buffer_write_data(i,0x1234,i, &data);
+		com_output_buffer_write_data(i,0x1234,i, data);
 		//data += i;
 	}
 
@@ -56,14 +56,17 @@ int main(void)
 
 	for(uint8_t i = 0; i<10; i++)
 		data[i] = 0;
-
+/*
+	//com_output_buffer_burst_content_msg(data);
 	for(uint8_t i = 0; i<10; i++)
 	{
 
-		length = com_output_buffer_read_data(&msg_id, &timestamp, &data);
-		com_output_buffer_write_data(msg_id,timestamp, length, &data);
-	}
+		length = com_output_buffer_read_message(&msg_id, &timestamp, data);
+		length = length +1;
+	}*/
 
+	uint8_t test_msg;
+	send_data(0x15, 0x1234,1,&test_msg);
 
     while (1) {
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>first_epuck</name>
+	<name>first_core</name>
 	<comment></comment>
 	<projects>
 	</projects>
@@ -28,11 +28,6 @@
 			<name>com_library</name>
 			<type>2</type>
 			<locationURI>PARENT-1-PROJECT_LOC/com_protocol</locationURI>
-		</link>
-		<link>
-			<name>e-puck2_main-processor</name>
-			<type>2</type>
-			<locationURI>PARENT-1-PROJECT_LOC/e-puck2_main-processor</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>

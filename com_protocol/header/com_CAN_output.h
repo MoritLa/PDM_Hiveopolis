@@ -8,6 +8,8 @@
 #ifndef HEADER_COM_CAN_OUTPUT_H_
 #define HEADER_COM_CAN_OUTPUT_H_
 
+#include "com_osal.h"
 
+void com_CAN_output_init(void);
 
 #endif /* HEADER_COM_CAN_OUTPUT_H_ */

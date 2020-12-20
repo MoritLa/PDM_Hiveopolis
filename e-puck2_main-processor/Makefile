@@ -20,6 +20,14 @@ ifeq ($(USE_OPT),)
 
   # Protection against stack overflows
   USE_OPT += -fstack-protector-all -L .
+else
+  USE_OPT += -O2 -ggdb -fomit-frame-pointer -falign-functions=16
+
+  # Aseba doesn't build with strict aliasing
+  USE_OPT += -fno-strict-aliasing
+
+  # Protection against stack overflows
+  USE_OPT += -fstack-protector-all -L .
 endif
 
 # C specific options here (added to USE_OPT).
