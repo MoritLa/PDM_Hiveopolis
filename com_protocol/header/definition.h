@@ -8,6 +8,9 @@
 #ifndef HEADER_DEFINITION_H_
 #define HEADER_DEFINITION_H_
 
+#include "configuration.h"
+#include "com_osal.h"
+
 //Message IDs
 enum coreMsgID{
 	CORE_HB=0x00,
@@ -43,4 +46,16 @@ enum modHeadFormat{
 enum modContFormat{
     MOD_CONT_DATA = 1
 };
+
+
+#define BURST_BUFFER    NB_MODULES
+
+enum InOutDef{
+    IN=0,
+    OUT=1
+};
+#define IN_OUT_SIZE     2
+
+#define BUFFER_ERROR    (uint8_t)(-1)
+
 #endif /* HEADER_DEFINITION_H_ */

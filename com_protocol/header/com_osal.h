@@ -9,6 +9,8 @@
 #define HEADER_COM_OSAL_H_
 
 #include <stdbool.h>
+#include "configuration.h"
+#include "definition.h"
 
 #ifdef CHIBIOS
 #include "ch.h"
@@ -42,6 +44,7 @@ typedef signed char int8_t;
 #endif
 
 #ifdef POSIX
+#include <unistd.h>
 #include "pthread.h"
 #include "time.h"
 
@@ -74,12 +77,14 @@ void com_osal_end(void);
 
 //Time functions
 void com_osal_thread_sleep_ms(uint32_t duration);
+void com_osal_thread_sleep_us(uint32_t duration);
 
 uint32_t com_osal_get_systime_ms(void);
 
 
 // everything needed for CAN
-#define CAN_ID		0x001
+
+#define CAN_REC_ERROR       0x7FF
 
 typedef struct MyMessage_struct
 {
@@ -94,7 +99,22 @@ typedef struct MyMessage_struct
 } MyMessage;
 
 uint8_t com_osal_send_CAN(MyMessage CANMessage);
+MyMessage com_osal_poll_CAN(void);
 void can_lock(void);
 void can_unlock(void);
+
+// buffer structure
+typedef struct ComMessage_struct
+{
+    uint8_t contentId ;
+    uint16_t timestamp;
+    uint8_t length;
+
+#ifdef CORE
+    uint16_t destination
+#endif
+
+    uint8_t* data;
+} ComMessage;
 
 #endif /* HEADER_COM_OSAL_H_ */

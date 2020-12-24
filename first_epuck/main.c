@@ -27,9 +27,13 @@ messagebus_t bus;
 MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
+uint8_t value = 0;
+
 int main(void)
 {
 	//msg_t new;
+    ComMessage testing;
+    uint8_t length;
 
     halInit();
     chSysInit();
@@ -41,39 +45,72 @@ int main(void)
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
 
 	uint8_t data[10] = {0,1,2,3,4,5,6,7,8,9 };
+	testing.data = data;
+	testing.timestamp = 0x1234;
 
 	for(uint8_t i = 0; i<10; i++)
 	{
-		com_output_buffer_write_data(i,0x1234,i, data);
-		//data += i;
+	    testing.contentId = i;
+	    testing.length = i;
+		value = com_output_buffer_write_message(testing);
 	}
+	/*value = com_output_buffer_msg_free(testing);
+	value = com_output_buffer_write_data(testing);
+	value = com_output_buffer_write_header(testing);
+	value = com_output_buffer_msg_free(testing);
+	value = com_output_buffer_write_header(testing);
+	value = com_output_buffer_write_message(testing);
+	value = com_output_buffer_write_data(testing);
 
-	uint8_t msg_id;
-	uint16_t timestamp;
-	uint8_t length;
+	value = com_output_buffer_msg_free(testing);
 
-	length = com_output_buffer_get_next_length();
+	value = com_output_buffer_get_next_length();
 
 	for(uint8_t i = 0; i<10; i++)
 		data[i] = 0;
-/*
+
 	//com_output_buffer_burst_content_msg(data);
 	for(uint8_t i = 0; i<10; i++)
-	{
+	    value = com_output_buffer_read_message(&testing);
 
-		length = com_output_buffer_read_message(&msg_id, &timestamp, data);
-		length = length +1;
-	}*/
+	value = com_output_buffer_msg_free(testing);
+	value = com_output_buffer_read_data(&testing);
+    length = com_output_buffer_read_header(&testing);
+    value = com_output_buffer_read_header(&testing);
+    value = com_output_buffer_read_message(&testing);
+    for(uint8_t i = 0; i<10; i++)
+        data[i] = 0;
+    testing.length = length;
+    value = com_output_buffer_read_data(&testing);
 
-	uint8_t test_msg;
-	send_data(0x15, 0x1234,1,&test_msg);
+    testing.contentId = 0x15;
+    testing.timestamp = 0x1234;
+    testing.length = 9;
+    testing.data = data;
+    value = com_output_buffer_msg_available();
+    value = com_output_buffer_write_header(testing);
+    value = com_output_buffer_msg_available();
+    value = com_output_buffer_write_data(testing);
+
+    value = com_output_buffer_msg_available();
+    value = com_output_buffer_read_header(&testing);
+    testing.length = 9;
+    value = com_output_buffer_msg_available();
+    value = com_output_buffer_read_data(&testing);*/
+
+    uint8_t test_msg = 0xBE;
+    testing.contentId = 0x15;
+    testing.timestamp = 0x1234;
+    testing.length = 1;
+    testing.data = &test_msg;
+    value = com_send_data(testing);
 
     while (1) {
 
         palTogglePad(GPIOD, GPIOD_LED_FRONT);
         chThdSleepMilliseconds(1000);
     }
-    return 0;
+    return value;
 }
 
 #define STACK_CHK_GUARD 0xe2dee396

@@ -7,7 +7,9 @@
 
 #ifndef HEADER_COM_MAIN_H_
 #define HEADER_COM_MAIN_H_
+
 #include "com_osal.h"
+#include "definition.h"
 
 bool com_main_init(void);
 void com_main_end(void);

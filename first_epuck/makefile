@@ -14,9 +14,9 @@ CSRC += ./main.c \
 		
 
 #Header folders to include
-INCDIR += 
+INCDIR += ./
 
-USE_OPT += -DCHIBIOS
+USE_OPT +=
 
 #Add source of Comunication protocol
 include $(COM_PATH)/com.mk

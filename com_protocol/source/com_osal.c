@@ -38,6 +38,11 @@ void com_osal_thread_sleep_ms(uint32_t duration)
     chThdSleep(MS2ST(duration));
 }
 
+void com_osal_thread_sleep_us(uint32_t duration)
+{
+    chThdSleep(US2ST(duration));
+}
+
 uint32_t com_osal_get_systime_ms(void)
 {
     return ST2MS(chVTGetSystemTime());
@@ -64,6 +69,35 @@ uint8_t com_osal_send_CAN(MyMessage CANMessage)
     return msg == MSG_OK?true:false;
 }
 
+MyMessage com_osal_poll_CAN()
+{
+    MyMessage input;
+    CANRxFrame rxf;
+
+    msg_t m = canReceive(&CAND1, CAN_ANY_MAILBOX, &rxf, MS2ST(7));
+    if (m != MSG_OK ||
+            rxf.IDE ||
+            rxf.RTR)
+    {
+        input.id = CAN_REC_ERROR;
+        input.length = 0;
+    }
+    else
+    {
+        input.id = rxf.IDE;
+        input.length = rxf.DLC;
+        input.data8[0] = rxf.data8[0];
+        input.data8[1] = rxf.data8[1];
+        input.data8[2] = rxf.data8[2];
+        input.data8[3] = rxf.data8[3];
+        input.data8[4] = rxf.data8[4];
+        input.data8[5] = rxf.data8[5];
+        input.data8[6] = rxf.data8[6];
+        input.data8[7] = rxf.data8[7];
+    }
+    return input;
+}
+
 void can_lock(void)
 {
     chBSemWait(&canLockSem) ;
@@ -78,7 +112,6 @@ void can_unlock(void)
 
 #ifdef LINUX
 #include <unistd.h>
-//#include <linux.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,16 +133,13 @@ bool com_osal_init(void)
     struct sockaddr_can addr;
     struct ifreq ifr;
 
-    system("sudo ip link set can0 type can bitrate 100000");
-    system("sudo ifconfig can0 up");
-
     //1.Create socket
     CAN_socket = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (CAN_socket < 0)
         return false;
 
     //2.Specify can0 device
-    strcpy(ifr.ifr_name, "can0");
+    strcpy(ifr.ifr_name, "can1");
     ret = ioctl(CAN_socket, SIOCGIFINDEX, &ifr);
     if (ret < 0)
         return false;
@@ -134,12 +164,16 @@ void com_osal_end(void)
 {
     //7.Close the socket and can0
     close(CAN_socket);
-    system("sudo ifconfig can0 down");
 }
 
 void com_osal_thread_sleep_ms(uint32_t duration)
 {
     usleep(duration*1000);
+}
+
+void com_osal_thread_sleep_us(uint32_t duration)
+{
+    usleep(duration);
 }
 
 uint32_t com_osal_get_systime_ms(void)
@@ -160,13 +194,13 @@ uint8_t com_osal_send_CAN(MyMessage sendMessage)
     frame.can_id = sendMessage.id;
     frame.can_dlc = sendMessage.length;
     frame.data[0] = sendMessage.data8[0];
-    frame.data[1] = sendMessage.data8[0];
-    frame.data[2] = sendMessage.data8[0];
-    frame.data[3] = sendMessage.data8[0];
-    frame.data[4] = sendMessage.data8[0];
-    frame.data[5] = sendMessage.data8[0];
-    frame.data[6] = sendMessage.data8[0];
-    frame.data[7] = sendMessage.data8[0];
+    frame.data[1] = sendMessage.data8[1];
+    frame.data[2] = sendMessage.data8[2];
+    frame.data[3] = sendMessage.data8[3];
+    frame.data[4] = sendMessage.data8[4];
+    frame.data[5] = sendMessage.data8[5];
+    frame.data[6] = sendMessage.data8[6];
+    frame.data[7] = sendMessage.data8[7];
 
     //6.Send message
     nbytes = write(CAN_socket, &frame, sizeof(frame));
@@ -174,5 +208,37 @@ uint8_t com_osal_send_CAN(MyMessage sendMessage)
         return false;
 
     return true;
+}
+
+MyMessage com_osal_poll_CAN()
+{
+    MyMessage input;
+    uint8_t nbBytes;
+    struct can_frame frame;
+    memset(&frame, 0, sizeof(struct can_frame));
+
+    nbBytes = read(CAN_socket, &frame, sizeof(frame));
+    if (nbBytes == 0 ||
+        (frame.can_id&(0x1<<29)) || // no remote transmission requests
+        (frame.can_id&(0x1<<30)) || // no error messages
+        (frame.can_id&(0x1<<31)) )  // no extended identifiers
+    {
+        input.id = CAN_REC_ERROR;
+        input.length = 0;
+    }
+    else
+    {
+        input.id = frame.can_id;
+        input.length = frame.can_dlc;
+        input.data8[0] = frame.data[0];
+        input.data8[1] = frame.data[1];
+        input.data8[2] = frame.data[2];
+        input.data8[3] = frame.data[3];
+        input.data8[4] = frame.data[4];
+        input.data8[5] = frame.data[5];
+        input.data8[6] = frame.data[6];
+        input.data8[7] = frame.data[7];
+    }
+    return input;
 }
 #endif
