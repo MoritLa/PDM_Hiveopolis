@@ -9,8 +9,9 @@
 #define HEADER_COM_OSAL_H_
 
 #include <stdbool.h>
+
+#include "com_utilities.h"
 #include "configuration.h"
-#include "definition.h"
 
 #ifdef CHIBIOS
 #include "ch.h"
@@ -28,19 +29,29 @@
 
 //Time functions
 #define COM_OSAL_MAX_TIME   ST2MS((systime_t)-1)
+
+void com_osal_setup_GPIO(void * GPIO, uint8 pin, uint8 dir);
+uint8 com_osal_get_GPIO(void * GPIO, uint8 pin);
+void com_osal_set_GPIO(void * GPIO, uint8 pin, uint8 val);
+
 #endif
 
 #ifdef LINUX
 #define POSIX
+/*
+typedef unsigned long long uint64;
+typedef long long int64;
+typedef unsigned int uint32;
+typedef int int32;
+typedef unsigned short uint16;
+typedef short int16;
+typedef unsigned char uint8;
+typedef signed char int8;*/
 
-typedef unsigned long long uint64_t;
-typedef long long int64_t;
-typedef unsigned int uint32_t;
-typedef int int32_t;
-typedef unsigned short uint16_t;
-typedef short int16_t;
-typedef unsigned char uint8_t;
-typedef signed char int8_t;
+void com_osal_setup_GPIO(uint8 pin, uint8 dir);
+void com_osal_set_GPIO(uint8 pin, uint8 val);
+uint8 com_osal_get_GPIO(uint8 pin);
+
 #endif
 
 #ifdef POSIX
@@ -76,45 +87,31 @@ bool com_osal_init(void);
 void com_osal_end(void);
 
 //Time functions
-void com_osal_thread_sleep_ms(uint32_t duration);
-void com_osal_thread_sleep_us(uint32_t duration);
+void com_osal_thread_sleep_ms(uint32 duration);
+void com_osal_thread_sleep_us(uint32 duration);
 
-uint32_t com_osal_get_systime_ms(void);
+uint32 com_osal_get_systime_ms(void);
 
 
 // everything needed for CAN
 
-#define CAN_REC_ERROR       0x7FF
-
-typedef struct MyMessage_struct
-{
-    uint16_t id:11 ;
-    uint8_t length:4;
-
-    union{
-        uint8_t data8[8] ;
-        uint16_t data16[4] ;
-        uint32_t data32[2];
-    } ;
-} MyMessage;
-
-uint8_t com_osal_send_CAN(MyMessage CANMessage);
-MyMessage com_osal_poll_CAN(void);
+uint8 com_osal_send_CAN(struct MyMessage_struct CANMessage);
+struct MyMessage_struct com_osal_poll_CAN(void);
 void can_lock(void);
 void can_unlock(void);
 
 // buffer structure
 typedef struct ComMessage_struct
 {
-    uint8_t contentId ;
-    uint16_t timestamp;
-    uint8_t length;
+    uint8 contentId ;
+    uint16 timestamp;
+    uint8 length;
 
 #ifdef CORE
-    uint16_t destination
+    uint16 destination;
 #endif
 
-    uint8_t* data;
+    uint8* data;
 } ComMessage;
 
 #endif /* HEADER_COM_OSAL_H_ */

@@ -10,10 +10,13 @@
 
 
 #include "com_osal.h"
-#include "definition.h"
+#include "com_utilities.h"
 
 void com_CAN_input_init(void);
 
-void com_CAN_input_set_module_id(uint8_t mod_id);
+void com_CAN_input_set_msg_callback(ComMessageCb protocolMsg);
+void com_CAN_input_set_emergency_cb(ComMessageCb emergencyMsg);
+
+void com_CAN_input_set_module_id(uint8 mod_id);
 
 #endif /* COM_CAN_INPUT_H_ */

@@ -20,15 +20,16 @@ int main(void)
 
     com_init();
     ComMessage message;
-    uint8_t data[3]={1,2,3};
-    uint8_t i = 0;
+    uint8 data[3]={1,2,3};
+    uint8 i = 0;
 
     message.contentId = 0x12;
     message.timestamp = 0x1234;
     message.length = 3;
     message.data = data;
+    message.destination = 0x001;
 
-    /*for(uint8_t j=0; j<50; j++)
+    /*for(uint8 j=0; j<50; j++)
     {
         send_data(message);
     }*/

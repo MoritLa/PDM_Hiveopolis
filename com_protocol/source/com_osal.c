@@ -33,17 +33,52 @@ void com_osal_end(void)
 
 }
 
-void com_osal_thread_sleep_ms(uint32_t duration)
+void com_osal_setup_GPIO(void* GPIO, uint8 pin, uint8 dir)
+{
+    (void) GPIO;
+    (void) pin;
+    (void) dir;
+}
+
+uint8 com_osal_get_GPIO(void * GPIO, uint8 pin)
+{
+    switch((uint32)GPIO)
+    {
+    case (uint32)GPIOC: return palReadPad(GPIOC, pin); break;
+    case (uint32)GPIOD: return palReadPad(GPIOD, pin); break;
+    default: return (uint8) -1; break;
+    }
+}
+
+void com_osal_set_GPIO(void * GPIO, uint8 pin, uint8 val)
+{
+    switch((uint32) GPIO)
+    {
+    case (uint32)GPIOC:
+        if(val)
+            palSetPad(GPIOC,pin);
+        else
+            palClearPad(GPIOC,pin);break;
+    case (uint32)GPIOD:
+        if(val)
+            palSetPad(GPIOD,pin);
+        else
+            palClearPad(GPIOD,pin);break;
+    default: break;
+    }
+}
+
+void com_osal_thread_sleep_ms(uint32 duration)
 {
     chThdSleep(MS2ST(duration));
 }
 
-void com_osal_thread_sleep_us(uint32_t duration)
+void com_osal_thread_sleep_us(uint32 duration)
 {
     chThdSleep(US2ST(duration));
 }
 
-uint32_t com_osal_get_systime_ms(void)
+uint32 com_osal_get_systime_ms(void)
 {
     return ST2MS(chVTGetSystemTime());
 }
@@ -51,7 +86,7 @@ uint32_t com_osal_get_systime_ms(void)
 BSEMAPHORE_DECL(canMessagesSem, 0) ;
 BSEMAPHORE_DECL(canLockSem, 0) ;
 
-uint8_t com_osal_send_CAN(MyMessage CANMessage)
+uint8 com_osal_send_CAN(MyMessage CANMessage)
 {
 // Format MyCanMessage to CANTxFrame
     msg_t msg;
@@ -84,7 +119,7 @@ MyMessage com_osal_poll_CAN()
     }
     else
     {
-        input.id = rxf.IDE;
+        input.id = rxf.SID;
         input.length = rxf.DLC;
         input.data8[0] = rxf.data8[0];
         input.data8[1] = rxf.data8[1];
@@ -166,24 +201,85 @@ void com_osal_end(void)
     close(CAN_socket);
 }
 
-void com_osal_thread_sleep_ms(uint32_t duration)
+void com_osal_setup_GPIO(uint8 pin, uint8 dir)
+{
+    FILE *io,*iodir;
+    char file[34];
+
+    //activate pin
+    io = fopen("/sys/class/gpio/export", "w");
+    fseek(io,0,SEEK_SET);
+    fprintf(io,"%d",pin);
+    fflush(io);
+
+    //set direction
+    sprintf(file, "/sys/class/gpio/gpio%d/direction", pin);
+    iodir = fopen(file, "w");
+    fseek(iodir,0,SEEK_SET);
+    if(dir == OUT)
+        fprintf(iodir,"out");
+    else
+        fprintf(iodir,"in");
+    fflush(iodir);
+
+    fclose(io);
+    fclose(iodir);
+}
+
+void com_osal_set_GPIO(uint8 pin, uint8 val)
+{
+    char file[30];
+    FILE* ioval;
+
+    sprintf(file, "/sys/class/gpio/gpio%d/value",pin);
+    ioval = fopen(file, "w");
+    fseek(ioval,0,SEEK_SET);
+    if(val>1)
+        val=1;
+    fprintf(ioval,"%d",val);
+
+    fclose(ioval);
+}
+
+uint8 com_osal_get_GPIO(uint8 pin)
+{
+    char file[30];
+    FILE* ioval;
+    char val=0;
+
+    sprintf(file, "/sys/class/gpio/gpio%d/value",pin);
+    ioval = fopen(file, "r");
+    fseek(ioval,0,SEEK_SET);
+
+    val = fgetc(ioval);
+
+    fclose(ioval);
+    if(val=='0')
+        return 0;
+    else if(val=='1')
+        return 1;
+    else
+        return (uint8) -1;
+}
+
+void com_osal_thread_sleep_ms(uint32 duration)
 {
     usleep(duration*1000);
 }
 
-void com_osal_thread_sleep_us(uint32_t duration)
+void com_osal_thread_sleep_us(uint32 duration)
 {
     usleep(duration);
 }
 
-uint32_t com_osal_get_systime_ms(void)
+uint32 com_osal_get_systime_ms(void)
 {
     clock_t time = clock();
 
     return time/(CLOCKS_PER_SEC/1000);
 }
 
-uint8_t com_osal_send_CAN(MyMessage sendMessage)
+uint8 com_osal_send_CAN(MyMessage sendMessage)
 {
     int nbytes;
     struct can_frame frame;
@@ -213,7 +309,7 @@ uint8_t com_osal_send_CAN(MyMessage sendMessage)
 MyMessage com_osal_poll_CAN()
 {
     MyMessage input;
-    uint8_t nbBytes;
+    uint8 nbBytes;
     struct can_frame frame;
     memset(&frame, 0, sizeof(struct can_frame));
 

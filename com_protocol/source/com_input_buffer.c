@@ -12,99 +12,132 @@
 
 #define IN_BUF_SIZE        INPUT_BUF_LENGTH
 
-static uint8_t inBuffer[NB_MODULES][IN_BUF_SIZE];
+static uint8 inBuffer[NB_MODULES][IN_BUF_SIZE];
 
-static uint8_t burstBuffer[2*BURST_LENGTH];
+static uint8 burstBuffer[2*BURST_LENGTH];
 
 static queue_t inputQueue[NB_MODULES+1];
 
-static uint8_t dataLeftIn[NB_MODULES+1][IN_OUT_SIZE];
-
 void com_input_buffer_init(void)
 {
-    for(uint8_t i=0; i<NB_MODULES;i++)
-    {
-        dataLeftIn[i][IN] = 0;
-        dataLeftIn[i][OUT] = 0;
-        inputQueue[i].head = 0;
-        inputQueue[i].tail = 0 ;
-        inputQueue[i].filledBytes = 0;
-        inputQueue[i].size = IN_BUF_SIZE;
-        inputQueue[i].data = inBuffer[i];
-    }
-    dataLeftIn[NB_MODULES][IN]= 0;
-    dataLeftIn[NB_MODULES][OUT]= 0;
+    for(uint8 i=0; i<NB_MODULES;i++)
+        com_buffer_tools_init_queue(&inputQueue[i],IN_BUF_SIZE, inBuffer[i]);
 
-    inputQueue[NB_MODULES].head = 0;
-    inputQueue[NB_MODULES].tail = 0;
-    inputQueue[NB_MODULES].filledBytes = 0;
-    inputQueue[NB_MODULES].size = 2*BURST_LENGTH;
-    inputQueue[NB_MODULES].data = burstBuffer;
+    com_buffer_tools_init_queue(&inputQueue[NB_MODULES], 2*BURST_LENGTH, burstBuffer);
 }
 
-uint8_t com_input_buffer_write_message(uint8_t bufferNb, ComMessage message)//uint8_t contentId, uint16_t timestamp, uint8_t length, uint8_t* data)
+void com_input_buffer_clear_buffer(uint8 bufferNb)
 {
-    return com_buffer_tool_write_message(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);//contentId, timestamp, length, data);
+    com_buffer_tools_clear_buffer(&inputQueue[bufferNb]);
 }
 
-uint8_t com_input_buffer_write_header(uint8_t bufferNb, ComMessage message)//uint8_t contentId, uint16_t timestamp, uint8_t length)
+uint8 com_input_buffer_write_message(uint8 bufferNb, ComMessage message)
 {
-    return com_buffer_tool_write_header(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);//contentId, timestamp, length);
+    return com_buffer_tool_write_message(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_write_data(uint8_t bufferNb, ComMessage message)//uint8_t length, uint8_t* data)
+uint8 com_input_buffer_write_header(uint8 bufferNb, ComMessage message)
 {
-    return com_buffer_tool_write_data(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);//length, data);
+    return com_buffer_tool_write_header(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_read_message(uint8_t bufferNb, ComMessage* message)//uint8_t* contentId, uint16_t* timestamp, uint8_t* data)
+uint8 com_input_buffer_write_data(uint8 bufferNb, ComMessage message)
 {
-    return com_buffer_tool_read_message(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);//contentId, timestamp, data);
+    return com_buffer_tool_write_data(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_get_next_length(uint8_t bufferNb)
+uint8 com_input_buffer_read_message(uint8 bufferNb, ComMessage* message)
 {
-    return com_buffer_tool_get_next_length(&inputQueue[bufferNb], dataLeftIn[bufferNb]);
+    return com_buffer_tool_read_message(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_read_header(uint8_t bufferNb, ComMessage* message)//uint8_t* contentId, uint16_t* timestamp)
+uint8 com_input_buffer_get_next_length(uint8 bufferNb)
 {
-    return com_buffer_tool_read_header(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);//contentId, timestamp);
+    return com_buffer_tool_get_next_length(&inputQueue[bufferNb]);
 }
 
-uint8_t com_input_buffer_read_data(uint8_t bufferNb, ComMessage* message)//uint8_t length, uint8_t* data)
+uint8 com_input_buffer_read_header(uint8 bufferNb, ComMessage* message)
 {
-    return com_buffer_tool_read_data(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);//length, data);
+    return com_buffer_tool_read_header(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_get_left_write(uint8_t bufferNb)
+uint8 com_input_buffer_read_data(uint8 bufferNb, ComMessage* message)
 {
-    return dataLeftIn[bufferNb][IN];
+    return com_buffer_tool_read_data(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_get_left_read(uint8_t bufferNb)
+uint8 com_input_buffer_get_left_write(uint8 bufferNb)
 {
-    return dataLeftIn[bufferNb][OUT];
+    return com_buffer_tool_get_left(&inputQueue[bufferNb], IN);
+    return inputQueue[bufferNb].dataLeft[IN];
 }
 
-bool com_input_buffer_empty(uint8_t bufferNb)
+uint8 com_input_buffer_get_left_read(uint8 bufferNb)
 {
+    return com_buffer_tool_get_left(&inputQueue[bufferNb], OUT);
+    return inputQueue[bufferNb].dataLeft[OUT];
+}
+
+bool com_input_buffer_empty(uint8 bufferNb)
+{
+    return com_buffer_tool_empty(&inputQueue[bufferNb]);
     return inputQueue[bufferNb].filledBytes == 0?true:false;
 }
 
-bool com_input_buffer_msg_available(uint8_t bufferNb)
+bool com_input_buffer_msg_available(uint8 bufferNb)
 {
-    return com_buffer_tool_msg_available(&inputQueue[bufferNb], dataLeftIn[bufferNb]);
+    return com_buffer_tool_msg_available(&inputQueue[bufferNb]);
 }
 
-bool com_input_buffer_msg_free(uint8_t bufferNb, ComMessage message)
+bool com_input_buffer_msg_free(uint8 bufferNb, ComMessage message)
 {
-    return com_buffer_tool_msg_free(&inputQueue[bufferNb], dataLeftIn[bufferNb], message);
+    return com_buffer_tool_msg_free(&inputQueue[bufferNb], message);
 }
 
-uint8_t com_input_buffer_burst_content_msg(uint8_t bufferNb, uint8_t* data)
+bool com_input_buffer_half_full(uint8 bufferNb)
 {
-    inputQueue[bufferNb].tail=inputQueue[bufferNb].head-10;
-    inputQueue[bufferNb].filledBytes = 10;
+    return com_buffer_tool_half_full(&inputQueue[bufferNb]);
+}
+
+
+bool com_input_buffer_undo_read(uint8 bufferNb)
+{
+    return com_buffer_tool_undo_read(&inputQueue[bufferNb]);
+}
+
+bool com_input_buffer_undo_write(uint8 bufferNb)
+{
+    return com_buffer_tool_undo_write(&inputQueue[bufferNb]);
+}
+
+uint8 com_input_buffer_is_blocked(uint8 bufferNb)
+{
+    return com_buffer_tool_is_blocked(&inputQueue[bufferNb]);
+}
+
+void com_input_buffer_block_buffer(uint8 bufferNb)
+{
+    com_buffer_tool_block_buffer(&inputQueue[bufferNb]);
+}
+
+void com_input_buffer_unblock_buffer(uint8 bufferNb)
+{
+    com_buffer_tool_unblock_buffer(&inputQueue[bufferNb]);
+}
+
+uint8 com_input_buffer_set_origin(uint8 bufferNb, uint16 origin)
+{
+    return com_buffer_tool_set_origin(&inputQueue[bufferNb], origin);
+}
+
+uint16 com_input_buffer_get_origin(uint8 bufferNb)
+{
+    return com_buffer_tool_get_origin(&inputQueue[bufferNb]);
+}
+
+uint8 com_input_buffer_burst_content_msg(uint8 bufferNb, uint8* data)
+{
+    //inputQueue[bufferNb].tail=inputQueue[bufferNb].head-10;
+    //inputQueue[bufferNb].filledBytes = 10;
     return 0;
 }

@@ -7,5 +7,6 @@ CSRC += $(COM_PATH)/source/com_input_buffer.c
 CSRC += $(COM_PATH)/source/com_main.c
 CSRC += $(COM_PATH)/source/com_osal.c
 CSRC += $(COM_PATH)/source/com_output_buffer.c 
+CSRC += $(COM_PATH)/source/com_utilities.c
 
 INCDIR +=  $(COM_PATH)/header

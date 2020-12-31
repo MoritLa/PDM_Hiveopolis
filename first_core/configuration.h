@@ -20,8 +20,11 @@
 
 #define USE_SECOND_BUS	    true
 
-#define CAN_BITRATE		    1000000
+#define CAN_BITRATE		    16529//1000000
 
-#define MODULE_TYPE         0x0
+#define ADRESS_PIN0         6
+#define ADRESS_PIN1         7
+#define ADRESS_PIN2         2
+#define ADRESS_PIN3         3
 
 #endif /* HEADER_CONFIGURATION_H_ */
