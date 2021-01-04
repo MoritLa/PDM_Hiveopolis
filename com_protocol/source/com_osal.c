@@ -18,7 +18,7 @@ bool com_osal_init(void)
 
         /* APB Clock is 42 Mhz
            42MHz / 2 / (1tq + 12tq + 8tq) = 1MHz => 1Mbit */
-        .btr = (1 << 0)  /* Baudrate prescaler (10 bits) */
+        .btr = (211 << 0)  /* Baudrate prescaler (10 bits) */
                | (11 << 16)/* Time segment 1 (3 bits) */
                | (7 << 20) /* Time segment 2 (3 bits) */
                | (0 << 24) /* Resync jump width (2 bits) */
@@ -146,8 +146,6 @@ void can_unlock(void)
 #endif
 
 #ifdef LINUX
-#include <unistd.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -155,6 +153,7 @@ void can_unlock(void)
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
@@ -189,8 +188,13 @@ bool com_osal_init(void)
     //4.Define receive rules
     struct can_filter rfilter[1];
     rfilter[0].can_id = 0x000;
-    rfilter[0].can_mask = CAN_SFF_MASK;
+    rfilter[0].can_mask = 0x000;
     setsockopt(CAN_socket, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
+
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 7000;
+    setsockopt(CAN_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     return true;
 }
@@ -274,9 +278,9 @@ void com_osal_thread_sleep_us(uint32 duration)
 
 uint32 com_osal_get_systime_ms(void)
 {
-    clock_t time = clock();
-
-    return time/(CLOCKS_PER_SEC/1000);
+    struct timeval tp;
+    gettimeofday(&tp, NULL);
+    return tp.tv_sec*1000+tp.tv_usec/1000;
 }
 
 uint8 com_osal_send_CAN(MyMessage sendMessage)
@@ -314,6 +318,7 @@ MyMessage com_osal_poll_CAN()
     memset(&frame, 0, sizeof(struct can_frame));
 
     nbBytes = read(CAN_socket, &frame, sizeof(frame));
+
     if (nbBytes == 0 ||
         (frame.can_id&(0x1<<29)) || // no remote transmission requests
         (frame.can_id&(0x1<<30)) || // no error messages

@@ -60,6 +60,10 @@ uint8 com_input_buffer_set_origin(uint8 bufferNb, uint16 origin);
 
 uint16 com_input_buffer_get_origin(uint8 bufferNb);
 
-uint8 com_input_buffer_burst_content_msg(uint8 bufferNb, uint8* data);
+void com_input_buffer_burst_requested(uint8 bufferNb);
+
+void com_input_buffer_burst_terminated(uint8 bufferNb);
+
+bool com_input_buffer_get_burst_request(uint8 bufferNb);
 
 #endif /* HEADER_COM_INPUT_BUFFER_H_ */

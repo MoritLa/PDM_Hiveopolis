@@ -12,9 +12,9 @@
 #include "com_CAN_input.h"
 
 
-bool com_init(void)
+void com_init(void)
 {
-	return com_main_init();
+	com_main_init();
 }
 
 void com_end(void)
@@ -46,9 +46,9 @@ void com_clear_output_queue(void)
 uint64 com_poll_mailbox(void)
 {
     uint64 mailboxes = 0;
-    for(uint8 i=0; i<NB_MODULES+1;i++)
+    for(uint8 i=0; i<=NB_MODULES;i++)
         if(com_input_buffer_msg_available(i))
-            mailboxes |= (0x1<<i);
+            mailboxes = mailboxes|((uint64)0x1<<i);
 
     return mailboxes;
 }
@@ -76,6 +76,10 @@ uint16 com_get_origin(uint8 mailbox)
 uint8 com_open_mailbox(uint16 origin)
 {
     uint8 mailbox = NO_MAILBOX;
+
+    for(uint8 i=0; i<NB_MODULES; i++)
+        if(com_input_buffer_get_origin(i)==origin)
+            return i;
 
     //select available mailbox
     for(uint8 i=0; i<NB_MODULES; i++)

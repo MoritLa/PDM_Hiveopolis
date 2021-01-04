@@ -69,19 +69,16 @@ uint8 com_input_buffer_read_data(uint8 bufferNb, ComMessage* message)
 uint8 com_input_buffer_get_left_write(uint8 bufferNb)
 {
     return com_buffer_tool_get_left(&inputQueue[bufferNb], IN);
-    return inputQueue[bufferNb].dataLeft[IN];
 }
 
 uint8 com_input_buffer_get_left_read(uint8 bufferNb)
 {
     return com_buffer_tool_get_left(&inputQueue[bufferNb], OUT);
-    return inputQueue[bufferNb].dataLeft[OUT];
 }
 
 bool com_input_buffer_empty(uint8 bufferNb)
 {
     return com_buffer_tool_empty(&inputQueue[bufferNb]);
-    return inputQueue[bufferNb].filledBytes == 0?true:false;
 }
 
 bool com_input_buffer_msg_available(uint8 bufferNb)
@@ -98,7 +95,6 @@ bool com_input_buffer_half_full(uint8 bufferNb)
 {
     return com_buffer_tool_half_full(&inputQueue[bufferNb]);
 }
-
 
 bool com_input_buffer_undo_read(uint8 bufferNb)
 {
@@ -135,9 +131,21 @@ uint16 com_input_buffer_get_origin(uint8 bufferNb)
     return com_buffer_tool_get_origin(&inputQueue[bufferNb]);
 }
 
-uint8 com_input_buffer_burst_content_msg(uint8 bufferNb, uint8* data)
+void com_input_buffer_burst_requested(uint8 bufferNb)
 {
-    //inputQueue[bufferNb].tail=inputQueue[bufferNb].head-10;
-    //inputQueue[bufferNb].filledBytes = 10;
-    return 0;
+    //if(bufferNb==BURST_BUFFER)
+    //    printf("burst_request\n");
+    com_buffer_tool_burst_requested(&inputQueue[bufferNb]);
+}
+
+void com_input_buffer_burst_terminated(uint8 bufferNb)
+{
+    //if(bufferNb==BURST_BUFFER)
+    //    printf("burst_terminated\n");
+    com_buffer_tool_burst_terminated(&inputQueue[bufferNb]);
+}
+
+bool com_input_buffer_get_burst_request(uint8 bufferNb)
+{
+    return com_buffer_tool_get_burst_request(&inputQueue[bufferNb]);
 }

@@ -82,7 +82,7 @@ int main(void)
     proximity_start();
     com_init();
 
-    OSAL_CREATE_THREAD(empty_buffer, NULL, OSAL_MEDIUM_PRIO);
+    //OSAL_CREATE_THREAD(empty_buffer, NULL, OSAL_MEDIUM_PRIO);
 
     /** Inits the Inter Process Communication bus. */
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
@@ -181,20 +181,20 @@ int main(void)
     testing.contentId = 0x15;
     testing.timestamp = 0x1234;
     testing.length = 1;
-    testing.data = &test_msg;
+    testing.data = data;
     value = com_send_data(testing);
 
-    testing.length = 16;
-    uint16 prox_val[8];
-    testing.data = (uint8*) prox_val;
+//    testing.length = 16;
+//    uint16 prox_val[8];
+//    testing.data = (uint8*) prox_val;
 
     while (1) {
-        for(uint8 i=0; i<8; i++)
-            prox_val[i] = get_prox(i);
+//        for(uint8 i=0; i<8; i++)
+//            prox_val[i] = get_prox(i);
 
         value = com_send_data(testing);
         palTogglePad(GPIOD, GPIOD_LED_FRONT);
-        chThdSleepMilliseconds(35);
+        chThdSleepMilliseconds(1);
     }
     return value;
 }

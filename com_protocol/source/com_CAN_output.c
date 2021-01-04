@@ -18,9 +18,12 @@ static bool slotFree[NB_MSG_P_S];
 static uint8 currentSlot = 0;
 
 static uint16 CANId = 0xFFFF;
+static bool burstActive = false;
+static bool burstAccepted = false;
 
 void update_free_slots(void);
 bool fill_slot(void);
+uint8 write_burst(void);
 
 
 uint8 value1;
@@ -38,29 +41,49 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
         slotFree[i] = true;
     }
     currentSlot = 0;
+
     while(1){
-        downsample++;
-        if(downsample == 10)
+        if(burstActive == true)
         {
-            update_free_slots();
-            downsample = 0;
+            write_burst();
+            burstActive = false;
+            burstAccepted = false;
+
+            com_osal_thread_sleep_ms(10);
+        }
+        else
+        {
+            downsample++;
+            if(downsample == 10)
+            {
+                update_free_slots();
+                downsample = 0;
+            }
+
+            if(slotFree[currentSlot] || burstAccepted)
+            {
+                if(fill_slot())
+                {
+                    slotFree[currentSlot]=false;
+                    messagesSend[currentSlot] = com_osal_get_systime_ms();
+                    currentSlot = (currentSlot+1)%NB_MSG_P_S;
+                }
+            }
+            if(burstAccepted==true && com_output_buffer_get_left_read()==0)
+                burstActive = true;
+            else
+                com_osal_thread_sleep_ms(10);
         }
 
-        if(slotFree[currentSlot])
-        {
-            if(fill_slot())
-            {
-                slotFree[currentSlot]=false;
-                messagesSend[currentSlot] = com_osal_get_systime_ms();
-                currentSlot = (currentSlot+1)%NB_MSG_P_S;
-            }
-        }
-        com_osal_thread_sleep_ms(10);
     }
 }
 
 void com_CAN_output_init(void)
 {
+    CANId = 0xFFFF;
+    burstActive = false;
+    burstAccepted = false;
+
     com_output_buffer_init();
 
     OSAL_CREATE_THREAD(CANSend,NULL, OSAL_MEDIUM_PRIO);
@@ -78,20 +101,22 @@ bool com_CAN_output_send_msg(uint8 msgId, MyMessage msg)
     bool canTransmit = false;
     MyMessage tempMsg;
 
-    if(CanId==0xFFFF)
+    if(CANId==0xFFFF)
         return false;
+    tempMsg.id=(1<<10)|CANId;
 
     switch(msgId)
     {
+#ifdef CORE
     case CORE_HEAD:
     case CORE_CONT:
     case CORE_BURST_ACCEPT:
     case CORE_HS:
-        tempMsg.id=CANId;
+        if(msg.length > 8-2)
+            return false;
         tempMsg.length = msg.length+2;
 
-
-        tempMsg.data8[0] =(MOD_CONT<<3) | (((uint8)(msg.id>>8))&0x7);
+        tempMsg.data8[0] =(msgId<<3) | (((uint8)(msg.id>>8))&0x3);
         tempMsg.data8[1] = (uint8)(msg.id&0xFF);
         for(uint8 i=0; i<msg.length;i++)
             tempMsg.data8[i+2] = msg.data8[i];
@@ -99,15 +124,9 @@ bool com_CAN_output_send_msg(uint8 msgId, MyMessage msg)
         canTransmit = com_osal_send_CAN(tempMsg);
         break;
     case CORE_REG:
-    case MOD_HEAD:
-    case MOD_CONT:
-    case MOD_BURST_REQ:
-    case MOD_BURST_CONT:
-    case MOD_FILE_HEAD:
-    case MOD_FILE_CONT:
-    case MOD_REG:
-    case MOD_HS:
-        tempMsg.id=CANId;
+    case CORE_CHOKE:
+        if(msg.length > 8-1)
+            return false;
         tempMsg.length = msg.length+1;
 
         tempMsg.data8[0] = msgId<<3;
@@ -116,10 +135,74 @@ bool com_CAN_output_send_msg(uint8 msgId, MyMessage msg)
 
         canTransmit = com_osal_send_CAN(tempMsg);
         break;
+#else
+    case MOD_HEAD:
+    case MOD_CONT:
+    case MOD_BURST_REQ:
+    case MOD_BURST_CONT:
+    case MOD_FILE_HEAD:
+    case MOD_FILE_CONT:
+    case MOD_REG:
+    case MOD_HS:
+        if(msg.length > 8-1)
+            return false;
+        tempMsg.length = msg.length+1;
+
+        tempMsg.data8[0] = msgId<<3;
+        for(uint8 i=0; i<msg.length;i++)
+            tempMsg.data8[i+1] = msg.data8[i];
+
+        canTransmit = com_osal_send_CAN(tempMsg);
+        break;
+#endif
     default: break;
     }
+    return canTransmit;
+}
+
+bool com_CAN_output_send_emergency_msg(uint8 msgId, MyMessage msg)
+{
+    bool canTransmit = false;
+    MyMessage tempMsg;
+
+    if(CANId==0xFFFF || msgId == HEARTBEAT)
+        return false;
+    tempMsg.id=CANId & (~(1<<10));
+
+#ifdef CORE
+
+        if(msg.length > 8-3)
+            return false;
+        tempMsg.length = msg.length+2;
+
+        tempMsg.data8[0] = msgId;
+        tempMsg.data8[1] = (uint8)((msg.id>>8)&0xFF);
+        tempMsg.data8[2] = (uint8)(msg.id&0xFF);
+        for(uint8 i=0; i<msg.length;i++)
+            tempMsg.data8[i+3] = msg.data8[i];
+
+        canTransmit = com_osal_send_CAN(tempMsg);
+
+
+#else
+
+        if(msg.length > 8-1)
+            return false;
+        tempMsg.length = msg.length+1;
+
+        tempMsg.data8[0] = msgId;
+        for(uint8 i=0; i<msg.length;i++)
+            tempMsg.data8[i+1] = msg.data8[i];
+
+        canTransmit = com_osal_send_CAN(tempMsg);
+#endif
 
     return canTransmit;
+}
+
+void com_CAN_output_burst_accepted(void)
+{
+    burstAccepted = true;
 }
 
 void update_free_slots(void)
@@ -160,13 +243,16 @@ bool fill_slot(void)
 #ifdef CORE
             if(lastDestination==0)
                 return false;
-            message.data8[0] =(MOD_CONT<<3) | (((uint8)(lastDestination>>8))&0x7);
+            message.data8[0] =(CORE_CONT<<3) | (((uint8)(lastDestination>>8))&0x3);
             message.data8[1] = (uint8)(lastDestination&0xFF);
+            bufMessage.data = message.data8+CORE_CONT_DATA;
+            bufMessage.length = 8-CORE_CONT_DATA;
 #else
             message.data8[0] =(MOD_CONT<<3);
-#endif
             bufMessage.data = message.data8+MOD_CONT_DATA;
             bufMessage.length = 8-MOD_CONT_DATA;
+#endif
+
             message.length = com_output_buffer_read_data(&bufMessage)+1;
             if(message.length == BUFFER_ERROR)
                 return false;
@@ -180,15 +266,19 @@ bool fill_slot(void)
                 return false;
 #ifdef CORE
             lastDestination = bufMessage.destination;
-            message.data8[0] =(MOD_CONT<<3) | (((uint8)(lastDestination>>8))&0x7);
+            message.data8[0] =(CORE_HEAD<<3) | (((uint8)(lastDestination>>8))&0x3);
             message.data8[1] = (uint8)(lastDestination&0xFF);
+            message.data8[CORE_HEAD_CONT] = bufMessage.contentId;
+            message.data8[CORE_HEAD_TIME] = (uint8) bufMessage.timestamp;
+            message.data8[CORE_HEAD_TIME+1] = (uint8) (bufMessage.timestamp>>8);
+            message.length = CORE_HEAD_DLC;
 #else
             message.data8[0] = (MOD_HEAD<<3);
-#endif
             message.data8[MOD_HEAD_CONT] = bufMessage.contentId;
             message.data8[MOD_HEAD_TIME] = (uint8) bufMessage.timestamp;
             message.data8[MOD_HEAD_TIME+1] = (uint8) (bufMessage.timestamp>>8);
             message.length = MOD_HEAD_DLC;
+#endif
 
             canTransmit = com_osal_send_CAN(message);
         }
@@ -199,4 +289,89 @@ bool fill_slot(void)
     }
     else
         return false;
+}
+
+uint8 val1,val2;
+
+uint8 write_burst(void)
+{
+    MyMessage tempMsg;
+    ComMessage msgContent;
+    uint16 frameCount = 0;
+    uint8 framePointer = 0;
+    uint8 msgHeadPointer = BUS_HEAD_LEN;
+    uint8 endCode = 0;
+
+    tempMsg.id = CANId | (1<<10);
+    tempMsg.length = 8;
+    tempMsg.data8[0] = MOD_BURST_CONT<<3;
+
+    while(true)
+    {
+        for(framePointer=1;framePointer<8;)
+        {
+            if(msgHeadPointer < BUS_HEAD_LEN)
+            {
+                switch(msgHeadPointer)
+                {
+                case MOD_BURST_TIME_1:
+                    tempMsg.data8[framePointer] = (uint8)msgContent.timestamp&0xFF;
+                    break;
+                case MOD_BURST_TIME_2:
+                    tempMsg.data8[framePointer] = (uint8)((msgContent.timestamp>>8)&0xFF);
+                    break;
+                case MOD_BURST_CONT_ID:
+                    tempMsg.data8[framePointer] = msgContent.contentId;
+                    break;
+                case MOD_BURST_LENGTH:
+                    tempMsg.data8[framePointer] = msgContent.length;
+                    break;
+                default: break;
+                }
+                msgHeadPointer++;
+                framePointer++;
+            }
+            else if(com_output_buffer_get_left_read()!=0)
+            {
+                msgContent.length = 8-framePointer;
+                msgContent.data = tempMsg.data8+framePointer;
+                framePointer += com_output_buffer_read_data(&msgContent);
+            }
+            else
+            {
+                if(frameCount+(framePointer-1+com_output_buffer_get_next_length()+BUF_HEAD_LEN)/7>BURST_LENGTH/7)
+                {
+                    endCode = 2;
+                    break;
+                }
+                com_output_buffer_read_header(&msgContent);
+                if(msgContent.length == BUFFER_ERROR)
+                {
+                    endCode = 1;
+                    break;
+                }
+                msgHeadPointer = 0;
+            }
+        }
+        if(msgHeadPointer!=0)
+        {
+            tempMsg.length = framePointer;
+//            com_osal_send_CAN(tempMsg);
+            while(!com_osal_send_CAN(tempMsg))
+                com_osal_thread_sleep_us(50);
+            frameCount++;
+
+        }
+        if(endCode)
+            break;
+    }
+
+    tempMsg.length = 1;
+    com_osal_send_CAN(tempMsg);
+
+    com_osal_thread_sleep_ms(5);
+
+    com_output_buffer_burst_terminated();
+
+    return endCode-1;
 }

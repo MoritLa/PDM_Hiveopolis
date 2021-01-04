@@ -51,6 +51,10 @@ bool com_output_buffer_undo_write(void);
 
 bool com_output_buffer_undo_read(void);
 
-uint8 com_output_buffer_burst_content_msg(uint8* data);
+void com_output_buffer_burst_requested(void);
+
+void com_output_buffer_burst_terminated(void);
+
+bool com_output_buffer_get_burst_request(void);
 
 #endif /* HEADER_COM_OUTPUT_BUFFER_H_ */

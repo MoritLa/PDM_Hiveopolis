@@ -10,7 +10,7 @@
 
 #include "configuration.h"
 
-#define OUT_BUF_SIZE		100//2*BURST_LENGTH//tests with 73 and 83 and 100
+#define OUT_BUF_SIZE		2*BURST_LENGTH//tests with 73 and 83 and 100
 
 static uint8 outBuffer[OUT_BUF_SIZE];
 
@@ -103,10 +103,17 @@ bool com_output_buffer_undo_read(void)
     return com_buffer_tool_undo_read(&outputQueue);
 }
 
-uint8 com_output_buffer_burst_content_msg(uint8* data)
+void com_output_buffer_burst_requested(void)
 {
-    (void) data;
-	//outputQueue.tail=outputQueue.head-10;
-	//outputQueue.filledBytes = 10;
-    return 0;
+    com_buffer_tool_burst_requested(&outputQueue);
+}
+
+void com_output_buffer_burst_terminated(void)
+{
+    com_buffer_tool_burst_terminated(&outputQueue);
+}
+
+bool com_output_buffer_get_burst_request(void)
+{
+    return com_buffer_tool_get_burst_request(&outputQueue);
 }

@@ -65,15 +65,15 @@ uint8 com_osal_get_GPIO(uint8 pin);
 #define OSAL_HIGH_PRIO                          98
 #define OSAL_HIGHEST_PRIO                       99
 
-#define OSAL_DEFINE_THREAD(tname, size, arg)    static size_t POSIX_SIZE = size;\
+#define OSAL_DEFINE_THREAD(tname, size, arg)    static size_t POSIX_SIZE_ ## tname = size;\
                                                 void* tname ## _func(void* arg)
 
-#define OSAL_CREATE_THREAD(tname, arg, prio)    pthread_t tname;\
+#define OSAL_CREATE_THREAD(tname, arg, prio)    {pthread_t tname;\
                                                 pthread_attr_t attr;\
                                                 pthread_attr_init(&attr);\
-                                                pthread_attr_setstacksize(&attr, POSIX_SIZE);\
+                                                pthread_attr_setstacksize(&attr, POSIX_SIZE_ ## tname);\
                                                 pthread_create(&tname, &attr, tname ## _func, arg);\
-                                                pthread_setschedprio(tname, prio);
+                                                pthread_setschedprio(tname, prio);}
 #define OSAL_SET_CHANNEL_NAME(tname)            //pthread_setname_np(pthread_self(), tname);
 
 //Time functions
@@ -99,19 +99,5 @@ uint8 com_osal_send_CAN(struct MyMessage_struct CANMessage);
 struct MyMessage_struct com_osal_poll_CAN(void);
 void can_lock(void);
 void can_unlock(void);
-
-// buffer structure
-typedef struct ComMessage_struct
-{
-    uint8 contentId ;
-    uint16 timestamp;
-    uint8 length;
-
-#ifdef CORE
-    uint16 destination;
-#endif
-
-    uint8* data;
-} ComMessage;
 
 #endif /* HEADER_COM_OSAL_H_ */

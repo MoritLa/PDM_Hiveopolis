@@ -12,7 +12,7 @@
 #include "com_osal.h"
 #include "com_utilities.h"
 
-bool com_init(void);
+void com_init(void);
 void com_end(void);
 
 void com_set_emergency_cb(ComMessageCb callback);

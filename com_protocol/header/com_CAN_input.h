@@ -18,5 +18,6 @@ void com_CAN_input_set_msg_callback(ComMessageCb protocolMsg);
 void com_CAN_input_set_emergency_cb(ComMessageCb emergencyMsg);
 
 void com_CAN_input_set_module_id(uint8 mod_id);
+uint16 com_CAN_input_get_CAN_id(void);
 
 #endif /* COM_CAN_INPUT_H_ */

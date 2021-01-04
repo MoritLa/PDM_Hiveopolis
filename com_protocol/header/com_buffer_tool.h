@@ -12,21 +12,6 @@
 #include "com_osal.h"
 #include "com_utilities.h"
 
-typedef struct {
-    size_t head;
-    size_t tail;
-    size_t size;
-    size_t filledBytes;
-    uint8* data;
-
-    uint8 dataLeft[IN_OUT_SIZE];
-    uint8 lastOpsLength[IN_OUT_SIZE];
-    uint8 lastOpsType[IN_OUT_SIZE];
-
-    uint16 origin; // can only be set if buffer is blocked and empty and no data is left to be written
-    uint8 blocked; // when buffer is blocked, no write action can be executed, unless data is left to be written
-} queue_t;
-
 enum lastOpsTypeDef {
         NO_OPS, MESSAGE_OPS, HEAD_OPS, DATA_OPS
 };
@@ -75,5 +60,11 @@ void com_buffer_tool_unblock_buffer(queue_t *queue);
 uint8 com_buffer_tool_set_origin(queue_t *queue, uint16 origin);
 
 uint16 com_buffer_tool_get_origin(queue_t *queue);
+
+void com_buffer_tool_burst_requested(queue_t *queue);
+
+void com_buffer_tool_burst_terminated(queue_t *queue);
+
+bool com_buffer_tool_get_burst_request(queue_t *queue);
 
 #endif /* HEADER_COM_BUFFER_TOOL_H_ */

@@ -10,17 +10,6 @@
 
 #include "com_buffer_tool.h"
 
-#ifdef CORE
-#define BUF_HEAD_LEN    (sizeof(((ComMessage*)NULL)->contentId)+\
-                         sizeof(((ComMessage*)NULL)->timestamp)+\
-                         sizeof(((ComMessage*)NULL)->length)+\
-                         sizeof(((ComMessage*)NULL)->destination))
-#else
-#define BUF_HEAD_LEN    (sizeof(((ComMessage*)NULL)->contentId)+\
-                         sizeof(((ComMessage*)NULL)->timestamp)+\
-                         sizeof(((ComMessage*)NULL)->length))
-#endif
-
 uint8 queue_read(queue_t *queue, uint8 nbBytes, uint8* data);
 uint8 queue_scan(queue_t * queue, uint8 nbBytes, uint8 offset, uint8* data);
 uint8 queue_write(queue_t *queue, uint8 nbBytes, uint8* data);
@@ -44,7 +33,7 @@ void com_buffer_tools_init_queue(queue_t* queue, size_t bufSize, uint8* buffer)
     queue->lastOpsLength[IN] = 0;
     queue->lastOpsLength[OUT] = 0;
 
-    queue->origin = 0xFFFF;
+    queue->origin = 0x7FF;
     queue->blocked = true;
 }
 
@@ -163,6 +152,8 @@ uint8 com_buffer_tool_write_data(queue_t * queue, ComMessage message)
             //*lastWrite = length;
             queue->dataLeft[IN] -= length;
             queue->lastOpsLength[IN] = length;
+            if(queue->dataLeft[IN]>=20)
+                return BUFFER_ERROR;
             return length;
         }
     }
@@ -434,6 +425,21 @@ uint8 com_buffer_tool_set_origin(queue_t *queue, uint16 origin)
 uint16 com_buffer_tool_get_origin(queue_t *queue)
 {
     return queue->origin;
+}
+
+void com_buffer_tool_burst_requested(queue_t *queue)
+{
+    queue->burstPending = true;
+}
+
+void com_buffer_tool_burst_terminated(queue_t *queue)
+{
+    queue->burstPending = false;
+}
+
+bool com_buffer_tool_get_burst_request(queue_t *queue)
+{
+    return queue->burstPending;
 }
 
 uint8 queue_read(queue_t *queue, uint8 nbBytes, uint8* data)
