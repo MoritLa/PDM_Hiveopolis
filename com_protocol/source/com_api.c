@@ -73,6 +73,11 @@ uint16 com_get_origin(uint8 mailbox)
     return com_input_buffer_get_origin(mailbox);
 }
 
+bool com_get_burst_pending(uint8 mailbox)
+{
+    return com_input_buffer_get_burst_request(mailbox);
+}
+
 uint8 com_open_mailbox(uint16 origin)
 {
     uint8 mailbox = NO_MAILBOX;

@@ -18,7 +18,7 @@ bool com_osal_init(void)
 
         /* APB Clock is 42 Mhz
            42MHz / 2 / (1tq + 12tq + 8tq) = 1MHz => 1Mbit */
-        .btr = (211 << 0)  /* Baudrate prescaler (10 bits) */
+        .btr = ( 1 /*39 45 52 159 181 211 1*/ << 0)  /* Baudrate prescaler (10 bits) */
                | (11 << 16)/* Time segment 1 (3 bits) */
                | (7 << 20) /* Time segment 2 (3 bits) */
                | (0 << 24) /* Resync jump width (2 bits) */
@@ -83,8 +83,8 @@ uint32 com_osal_get_systime_ms(void)
     return ST2MS(chVTGetSystemTime());
 }
 
-BSEMAPHORE_DECL(canMessagesSem, 0) ;
-BSEMAPHORE_DECL(canLockSem, 0) ;
+//MUTEX_DECL(canMessagesSem, 0) ;
+MUTEX_DECL(canLockMux) ;
 
 uint8 com_osal_send_CAN(MyMessage CANMessage)
 {
@@ -99,8 +99,10 @@ uint8 com_osal_send_CAN(MyMessage CANMessage)
 
     txf.data32[0] = CANMessage.data32[0] ;
     txf.data32[1] = CANMessage.data32[1];
+    com_osal_can_lock();
 
     msg = canTransmit(&CAND1, CAN_ANY_MAILBOX, &txf, MS2ST(7));
+    com_osal_can_unlock();
     return msg == MSG_OK?true:false;
 }
 
@@ -133,14 +135,14 @@ MyMessage com_osal_poll_CAN()
     return input;
 }
 
-void can_lock(void)
+void com_osal_can_lock(void)
 {
-    chBSemWait(&canLockSem) ;
+    chMtxLock(&canLockMux) ;
 }
 
-void can_unlock(void)
+void com_osal_can_unlock(void)
 {
-    chBSemSignal(&canLockSem) ;
+    chMtxUnlock(&canLockMux) ;
 }
 
 #endif
@@ -159,6 +161,8 @@ void can_unlock(void)
 
 static int CAN_socket;
 
+pthread_mutex_t CANlock = PTHREAD_MUTEX_INITIALIZER;
+
 bool com_osal_init(void)
 {
 // init CAN
@@ -172,13 +176,13 @@ bool com_osal_init(void)
     if (CAN_socket < 0)
         return false;
 
-    //2.Specify can0 device
+    //2.Specify can1 device
     strcpy(ifr.ifr_name, "can1");
     ret = ioctl(CAN_socket, SIOCGIFINDEX, &ifr);
     if (ret < 0)
         return false;
 
-    //3.Bind the socket to can0
+    //3.Bind the socket to can1
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
     ret = bind(CAN_socket, (struct sockaddr *)&addr, sizeof(addr));
@@ -303,7 +307,12 @@ uint8 com_osal_send_CAN(MyMessage sendMessage)
     frame.data[7] = sendMessage.data8[7];
 
     //6.Send message
+    //static uint16 tx = 1;
+    //printf("%d\n",tx++);
+
     nbytes = write(CAN_socket, &frame, sizeof(frame));
+    //printf("%d\n",write(CAN_socket, &frame, sizeof(frame)));
+
     if(nbytes != sizeof(frame))
         return false;
 
@@ -318,6 +327,10 @@ MyMessage com_osal_poll_CAN()
     memset(&frame, 0, sizeof(struct can_frame));
 
     nbBytes = read(CAN_socket, &frame, sizeof(frame));
+
+    /*static uint16 tx = 1;
+    if(nbBytes != 0)
+        printf("%d\n",tx++);*/
 
     if (nbBytes == 0 ||
         (frame.can_id&(0x1<<29)) || // no remote transmission requests
@@ -341,5 +354,15 @@ MyMessage com_osal_poll_CAN()
         input.data8[7] = frame.data[7];
     }
     return input;
+}
+
+void com_osal_can_lock(void)
+{
+    pthread_mutex_lock(&CANlock);
+}
+
+void com_osal_can_unlock(void)
+{
+    pthread_mutex_unlock(&CANlock);
 }
 #endif

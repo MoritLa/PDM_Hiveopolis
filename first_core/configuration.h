@@ -15,7 +15,7 @@
 #define BURST_LENGTH	    1024
 #define NB_MSG_P_S          32
 
-#define INPUT_BUF_LENGTH    256
+#define INPUT_BUF_LENGTH    300
 #define NB_MODULES          55
 
 #define USE_SECOND_BUS	    true

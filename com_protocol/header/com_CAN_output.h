@@ -21,4 +21,10 @@ bool com_CAN_output_send_emergency_msg(uint8 msgId, MyMessage msg);
 
 void com_CAN_output_burst_accepted(void);
 
+bool com_CAN_output_get_burst_accepted(void);
+
+#ifndef CORE
+void com_CAN_output_set_fps(uint8 fps);
+#endif
+
 #endif /* HEADER_COM_CAN_OUTPUT_H_ */

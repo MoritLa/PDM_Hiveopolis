@@ -27,6 +27,8 @@ ComMessage com_read_mailbox(uint8 mailbox, uint8* data);
 
 uint16 com_get_origin(uint8 mailbox);
 
+bool com_get_burst_pending(uint8 mailbox);
+
 uint8 com_open_mailbox(uint16 origin);
 
 

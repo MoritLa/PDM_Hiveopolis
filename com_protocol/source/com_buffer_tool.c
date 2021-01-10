@@ -35,6 +35,7 @@ void com_buffer_tools_init_queue(queue_t* queue, size_t bufSize, uint8* buffer)
 
     queue->origin = 0x7FF;
     queue->blocked = true;
+    queue->burstPending = false;
 }
 
 void com_buffer_tools_clear_buffer(queue_t* queue)
@@ -51,6 +52,9 @@ uint8 com_buffer_tool_write_message(queue_t * queue, ComMessage message)
     //*lastWrite=0;
     queue->lastOpsLength[IN] = 0;
     queue->lastOpsType[IN] = MESSAGE_OPS;
+
+    if(message.length == BUFFER_ERROR)
+        return BUFFER_ERROR;
 
     if( queue->blocked == true ||
         queue->dataLeft[IN] != 0 ||/*dataLeft[IN] != 0 ||*/

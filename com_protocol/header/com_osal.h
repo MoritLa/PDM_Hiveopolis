@@ -97,7 +97,7 @@ uint32 com_osal_get_systime_ms(void);
 
 uint8 com_osal_send_CAN(struct MyMessage_struct CANMessage);
 struct MyMessage_struct com_osal_poll_CAN(void);
-void can_lock(void);
-void can_unlock(void);
+void com_osal_can_lock(void);
+void com_osal_can_unlock(void);
 
 #endif /* HEADER_COM_OSAL_H_ */

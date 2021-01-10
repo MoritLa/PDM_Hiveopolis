@@ -35,9 +35,11 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
             if(!com_input_buffer_get_burst_request(BURST_BUFFER))
             {
                 burstActive = false;
+
                 //printf("burst_terminated\n");
-                com_osal_thread_sleep_ms(93);
-                currentBurst++;
+                //com_osal_thread_sleep_ms(93);
+
+                //currentBurst=(currentBurst+1)%NB_MODULES;
             }
             else
                 com_osal_thread_sleep_ms(1);
@@ -50,27 +52,30 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
                 {
                     if(!com_input_buffer_set_origin(BURST_BUFFER,com_input_buffer_get_origin(currentBurst)))
                         break; //don't start burst if buffer is not ready
+
+                    tempMsg.length = 0;
+                    tempMsg.id = com_input_buffer_get_origin(currentBurst);
+
+                    if(!com_CAN_output_send_msg(CORE_BURST_ACCEPT,tempMsg))
+                        break;
+                    //printf("burst activated\n");
+                    burstActive = true;
                     com_input_buffer_burst_requested(BURST_BUFFER);
                     com_input_buffer_burst_terminated(currentBurst);
                     com_input_buffer_unblock_buffer(BURST_BUFFER);
-
-                    //printf("burst activated\n");
-
-                    burstActive = true;
-                    tempMsg.length = 0;
-                    tempMsg.id = com_input_buffer_get_origin(currentBurst);
-//                    com_CAN_output_send_msg(CORE_BURST_ACCEPT,tempMsg);
                     break;
                 }
-                currentBurst=(currentBurst+1)%NB_MODULES;
+                //currentBurst=(currentBurst+1)%NB_MODULES;
             }
             if(burstActive)
-                continue;
-            com_osal_thread_sleep_ms(100);
+                com_osal_thread_sleep_ms( 25 /*570 490 430 22*/); //guarantee 1024bytes of burst content (146 messages)+25%
+            else
+                com_osal_thread_sleep_ms(10);
         }
     }
 }
 #else
+
 OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
 
     (void) arg;
@@ -80,34 +85,76 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
 
     while(true)
     {
-        if(com_output_buffer_half_full()&&(com_output_buffer_get_burst_request()==false))
+        if(com_output_buffer_half_full() &&
+            (com_output_buffer_get_burst_request()==false))
         {
             tempMsg.length = 0;
             //request burst
-//            if(com_CAN_output_send_msg(MOD_BURST_REQ,tempMsg))
-//                com_output_buffer_burst_requested();
+            if(com_CAN_output_send_msg(MOD_BURST_REQ,tempMsg))
+                com_output_buffer_burst_requested();
         }
-        com_osal_thread_sleep_ms(100);
+        com_osal_thread_sleep_ms(10);
     }
 }
 #endif
 
 void com_main_init(void)
 {
-    com_osal_init();
+    MyMessage tempMsg;
 
-    OSAL_CREATE_THREAD(BurstHandler, NULL, OSAL_MEDIUM_PRIO);
+    com_osal_init();
 
     com_CAN_output_init();
 	com_CAN_input_init();
 
 	com_CAN_input_set_msg_callback(&input_msg_callback);
     setup_CAN_id();
+
+    tempMsg.length = 0;
+
+#ifdef CORE
+    while(!com_CAN_output_send_msg(CORE_REG,tempMsg))
+        com_osal_thread_sleep_ms(1);
+    com_output_buffer_unblock_buffer();
+#else
+    while(!com_CAN_output_send_msg(MOD_REG,tempMsg))
+        com_osal_thread_sleep_ms(1);
+#endif
+
+    OSAL_CREATE_THREAD(BurstHandler, NULL, OSAL_MEDIUM_PRIO);
 }
 
 void com_main_end(void)
 {
     com_osal_end();
+}
+
+uint8 com_main_register_module(uint16 origin)
+{
+    uint8 mailbox = NO_MAILBOX;
+
+     for(uint8 i=0; i<NB_MODULES; i++)
+         if(com_input_buffer_get_origin(i)==origin)
+             return i;
+
+     //select available mailbox
+     for(uint8 i=0; i<NB_MODULES; i++)
+         if(com_input_buffer_is_blocked(i)&&
+             com_input_buffer_empty(i))
+         {
+             mailbox = i;
+             break;
+         }
+     // if there is no Mailbox available or allocation fails
+     if(mailbox != NO_MAILBOX &&
+         com_input_buffer_set_origin(mailbox, origin))
+     {
+         com_input_buffer_unblock_buffer(mailbox);
+         return mailbox;
+     }
+     else
+         return NO_MAILBOX;
+     return NO_MAILBOX;
 }
 
 void setup_CAN_id(void)
@@ -135,16 +182,51 @@ void setup_CAN_id(void)
 
 void input_msg_callback(uint8 msgId, MyMessage msg)
 {
+    MyMessage tempMsg;
+#ifdef CORE
+    uint8 i = 0;
+#endif
+
     switch(msgId)
     {
 #ifdef CORE
     case MOD_BURST_REQ:
-        for(uint8 i=0; i<NB_MODULES; i++)
+        for(i=0; i<NB_MODULES; i++)
             if((com_input_buffer_get_origin(i)&0x3FF)==(msg.id&0x3FF))
             {
                 com_input_buffer_burst_requested(i);
                 break;
             }
+        break;
+    case MOD_REG:
+        //Module Handshake
+        tempMsg.length = 0;
+        tempMsg.id = msg.id;
+
+        //clear burst flags
+        for(i=0; i<=NB_MODULES; i++)
+            if((com_input_buffer_get_origin(i)&0x3FF)==(msg.id&0x3FF))
+            {
+                com_input_buffer_clear_buffer(i);
+                if((com_input_buffer_get_origin(BURST_BUFFER)&0x3FF)==(msg.id&0x3FF))
+                    com_input_buffer_clear_buffer(BURST_BUFFER);
+                com_input_buffer_set_origin(i,msg.id);
+                com_input_buffer_unblock_buffer(i);
+                break;
+            }
+        if(i == NB_MODULES)
+        {
+            //register module
+            com_main_register_module(msg.id);
+        }
+        //reset input buffer
+        //if current burst from this ID, reset burst buffer
+        // stop active burst
+        while(!com_CAN_output_send_msg(CORE_HS,tempMsg))
+            com_osal_thread_sleep_ms(1);
+
+        break;
+    case MOD_HS:
         break;
 #else
     case CORE_BURST_ACCEPT:
@@ -158,7 +240,27 @@ void input_msg_callback(uint8 msgId, MyMessage msg)
         }
         break;
     case CORE_CHOKE:
-        NB_MSG_P_S = msg.data8[0];
+        com_CAN_output_set_fps(msg.data8[0]);
+        //NB_MSG_P_S = msg.data8[0];
+        break;
+    case CORE_REG:
+        tempMsg.length = 0;
+        while(!com_CAN_output_send_msg(MOD_REG,tempMsg))
+            com_osal_thread_sleep_ms(1);
+        if(!com_CAN_output_get_burst_accepted())
+            com_output_buffer_burst_terminated();
+        break;
+    case CORE_HS:
+        tempMsg.length = 4;
+        tempMsg.data8[0] = (uint8) SERIAL_NUMBER;
+        tempMsg.data8[1] = (uint8) (SERIAL_NUMBER>>8);
+        tempMsg.data8[2] = (uint8) HEARTBEAT_PERIOD;
+        tempMsg.data8[3] = (uint8) (HEARTBEAT_PERIOD>>8);
+        while(!com_CAN_output_send_msg(MOD_HS, tempMsg))
+            com_osal_thread_sleep_ms(1);
+        //Start transmitting
+        com_output_buffer_unblock_buffer();
+        break;
 #endif
     default: break;
     }

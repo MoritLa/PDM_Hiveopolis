@@ -19,7 +19,7 @@ static queue_t outputQueue ;
 void com_output_buffer_init(void)
 {
     com_buffer_tools_init_queue(&outputQueue, OUT_BUF_SIZE,outBuffer);
-    com_buffer_tool_unblock_buffer(&outputQueue);
+    //com_buffer_tool_unblock_buffer(&outputQueue);
 }
 
 void com_output_buffer_clear_buffer(void)
@@ -75,7 +75,6 @@ uint8 com_output_buffer_get_left_read(void)
 bool com_output_buffer_empty(void)
 {
     return com_buffer_tool_empty(&outputQueue);
-    return outputQueue.filledBytes == 0?true:false;
 }
 
 bool com_output_buffer_msg_available(void)
@@ -101,6 +100,21 @@ bool com_output_buffer_undo_write(void)
 bool com_output_buffer_undo_read(void)
 {
     return com_buffer_tool_undo_read(&outputQueue);
+}
+
+uint8 com_output_buffer_is_blocked(void)
+{
+    return com_buffer_tool_is_blocked(&outputQueue);
+}
+
+void com_output_buffer_block_buffer(void)
+{
+    com_buffer_tool_block_buffer(&outputQueue);
+}
+
+void com_output_buffer_unblock_buffer(void)
+{
+    com_buffer_tool_unblock_buffer(&outputQueue);
 }
 
 void com_output_buffer_burst_requested(void)

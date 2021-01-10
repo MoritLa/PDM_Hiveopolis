@@ -51,6 +51,12 @@ bool com_output_buffer_undo_write(void);
 
 bool com_output_buffer_undo_read(void);
 
+uint8 com_output_buffer_is_blocked(void);
+
+void com_output_buffer_block_buffer(void);
+
+void com_output_buffer_unblock_buffer(void);
+
 void com_output_buffer_burst_requested(void);
 
 void com_output_buffer_burst_terminated(void);

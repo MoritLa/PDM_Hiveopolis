@@ -69,6 +69,7 @@ OSAL_DEFINE_THREAD(empty_buffer, 256, arg){
     }
 }
 
+
 int main(void)
 {
 	//msg_t new;
@@ -84,10 +85,13 @@ int main(void)
 
     //OSAL_CREATE_THREAD(empty_buffer, NULL, OSAL_MEDIUM_PRIO);
 
-    /** Inits the Inter Process Communication bus. */
+    // Inits the Inter Process Communication bus.
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
 
-	uint8 data[10] = {0,1,2,3,4,5,6,7,8,9 };
+	//uint8 data[10] = {0,1,2,3,4,5,6,7,8,9 };
+	uint8 data[255];
+	for(uint8_t i = 0; i<255; i++)
+	    data[i] = i;
 	testing.data = data;
 	testing.timestamp = 0x1234;
 
@@ -180,7 +184,7 @@ int main(void)
     uint8 test_msg = 0xBE;
     testing.contentId = 0x15;
     testing.timestamp = 0x1234;
-    testing.length = 1;
+    testing.length = 253;
     testing.data = data;
     value = com_send_data(testing);
 
@@ -191,10 +195,11 @@ int main(void)
     while (1) {
 //        for(uint8 i=0; i<8; i++)
 //            prox_val[i] = get_prox(i);
+        for(uint8 i=0; i<10; i++)
+            value = com_send_data(testing);
 
-        value = com_send_data(testing);
         palTogglePad(GPIOD, GPIOD_LED_FRONT);
-        chThdSleepMilliseconds(1);
+        chThdSleepMicroseconds(1000);
     }
     return value;
 }

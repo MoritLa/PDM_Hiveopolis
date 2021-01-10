@@ -6,6 +6,7 @@
  */
 
 #include "com_CAN_input.h"
+#include "com_CAN_output.h"
 #include "com_input_buffer.h"
 #include "configuration.h"
 
@@ -26,9 +27,11 @@ OSAL_DEFINE_THREAD(CANReceive, 256, arg) {
     MyMessage inputMessage;
 
     while(1){
-        com_osal_thread_sleep_us(1000);
+        com_osal_thread_sleep_us(50);
 
+        //com_osal_can_lock();
         inputMessage = com_osal_poll_CAN();
+        //com_osal_can_unlock();
 
         //for(uint8 i=0; i<8; i++)
         //    printf("%x ", inputMessage.data8[i]);
@@ -88,6 +91,7 @@ uint8 write_to_buffer(MyMessage message)
         }
     if(inputBufferId==0xFF)
         return 1;
+
     if((0x400&message.id)==0)
         return treat_emergency_message(message);
     else if((message.data8[0]&(0x1F<<3)) == (MOD_BURST_CONT<<3))
@@ -235,6 +239,8 @@ uint8 treate_burst_message(MyMessage message)
     static uint8 msgHeadPointer = 0;
     uint8 length;
 
+    static uint8 msgCount = 0;
+
     //burst does not come from a module of interest -> burst buffer not set up
     if(com_input_buffer_get_origin(BURST_BUFFER) != message.id)
         return 1;
@@ -247,7 +253,7 @@ uint8 treate_burst_message(MyMessage message)
         //end burst
         com_input_buffer_block_buffer(BURST_BUFFER);
         com_input_buffer_burst_terminated(BURST_BUFFER);
-
+        msgCount = 0;
         return 1;
     }
 
@@ -290,5 +296,6 @@ uint8 treate_burst_message(MyMessage message)
             framePointer++;
         }
     }
+    msgCount++;
     return 1;
 }
