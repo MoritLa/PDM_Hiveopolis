@@ -420,7 +420,7 @@ uint8 com_buffer_tool_set_origin(queue_t *queue, uint16 origin)
         queue->dataLeft[IN] == 0 ||
         queue->filledBytes == 0)
     {
-        queue->origin = origin;
+        queue->origin = origin&0x3FF;
         return true;
     }
     return false;

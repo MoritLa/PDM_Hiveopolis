@@ -83,8 +83,10 @@ uint8 com_open_mailbox(uint16 origin)
     uint8 mailbox = NO_MAILBOX;
 
     for(uint8 i=0; i<NB_MODULES; i++)
-        if(com_input_buffer_get_origin(i)==origin)
+    {
+        if(com_input_buffer_get_origin(i)==(origin&0x3FF))
             return i;
+    }
 
     //select available mailbox
     for(uint8 i=0; i<NB_MODULES; i++)

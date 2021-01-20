@@ -158,6 +158,7 @@ void com_osal_can_unlock(void)
 #include <sys/time.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
+#include <linux/can/error.h>
 
 static int CAN_socket;
 

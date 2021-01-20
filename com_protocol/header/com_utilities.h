@@ -76,7 +76,7 @@ enum modContFormat{
     NB_MODULES = 1;
 #endif
 
-#define CORE_BUFFER     NB_MODULES-1
+#define CORE_BUFFER     (NB_MODULES-1)
 #endif
 
 #define BURST_BUFFER    NB_MODULES

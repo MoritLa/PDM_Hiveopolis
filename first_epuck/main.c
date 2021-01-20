@@ -29,7 +29,9 @@ messagebus_t bus;
 MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
-uint8 value = 0;
+static uint8 value = 0;
+
+static uint8 dataLength = 50;
 
 OSAL_DEFINE_THREAD(empty_buffer, 256, arg){
     OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
@@ -69,6 +71,31 @@ OSAL_DEFINE_THREAD(empty_buffer, 256, arg){
     }
 }
 
+OSAL_DEFINE_THREAD(read_core, 256, arg){
+    OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
+    (void) arg;
+    uint8 inMailbox;
+    ComMessage inMessage;
+
+    inMailbox = com_open_mailbox(0x400);
+
+    while(true)
+    {
+        while(com_poll_mailbox() & (0x1<<inMailbox))
+        {
+            if(com_get_message_length(inMailbox)!=1)
+            {
+                inMessage = com_read_mailbox(inMailbox, &dataLength);
+                continue;
+            }
+            inMessage = com_read_mailbox(inMailbox, &dataLength);
+            if(inMessage.length == BUFFER_ERROR)
+                continue;
+        }
+
+        com_osal_thread_sleep_ms(10);
+    }
+}
 
 int main(void)
 {
@@ -84,6 +111,7 @@ int main(void)
     com_init();
 
     //OSAL_CREATE_THREAD(empty_buffer, NULL, OSAL_MEDIUM_PRIO);
+    OSAL_CREATE_THREAD(read_core, NULL, OSAL_MEDIUM_PRIO);
 
     // Inits the Inter Process Communication bus.
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
@@ -184,7 +212,7 @@ int main(void)
     uint8 test_msg = 0xBE;
     testing.contentId = 0x15;
     testing.timestamp = 0x1234;
-    testing.length = 253;
+    testing.length = 100;
     testing.data = data;
     value = com_send_data(testing);
 
@@ -195,6 +223,8 @@ int main(void)
     while (1) {
 //        for(uint8 i=0; i<8; i++)
 //            prox_val[i] = get_prox(i);
+        testing.length = dataLength;
+
         for(uint8 i=0; i<10; i++)
             value = com_send_data(testing);
 

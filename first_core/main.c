@@ -198,12 +198,10 @@ OSAL_DEFINE_THREAD(testChoke2, 256, arg) {
 }
 OSAL_DEFINE_THREAD(testDatarate, 256, arg) {
     uint8 inMailbox[2];
-    MyMessage msg;
+    ComMessage msg;
     ComMessage inMsg;
 
-//    uint8 fps[7] = {32, 45, 55, 60, 64, 70, 80};
-//    uint8 fps[7] = {57, 58, 59, 61, 62, 63, 65};
-    uint8 fps[13] = {32, 45, 55, 58, 59, 60, 61, 62, 63, 64, 65, 70, 80};
+    uint8 dataLength[13] = {1, 7, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 253};
     uint8 data[255];
     inMailbox[0] = com_open_mailbox(0x441);
     inMailbox[1] = com_open_mailbox(0x442);
@@ -224,16 +222,20 @@ OSAL_DEFINE_THREAD(testDatarate, 256, arg) {
     bool burstStarted = com_get_burst_pending(BURST_BUFFER);
 
     msg.length = 1;
-    //com_osal_thread_sleep_ms(50000);
-    //com_input_buffer_clear_buffer(inMailbox[0]);
-    //com_input_buffer_clear_buffer(inMailbox[1]);
 
     time_old = com_osal_get_systime_ms();
 
-    for(uint8 i=0;i<1;i++)
+    for(uint8 i=0;i<13;i++)
     {
-        msg.data8[0] = fps[i];
-        //com_CAN_output_send_msg(CORE_CHOKE, msg);
+        com_osal_thread_sleep_us(200);
+
+        msg.length = 1;
+        msg.data = &dataLength[i];
+        msg.destination = 0x441;
+        com_send_data(msg);
+        com_osal_thread_sleep_us(100);
+        msg.destination = 0x442;
+        com_send_data(msg);
 
         printf("start\n");
         while(true)
@@ -243,12 +245,13 @@ OSAL_DEFINE_THREAD(testDatarate, 256, arg) {
                 (time_new < time_old && time_new >= 10000-(((uint32)-1)-time_old)))
             {
                 time_old = time_new;
-                if(secondCount>=5)
+                if(secondCount>=3)
                 {
-                    fprintf(io,"%d;%d;%d;%d;%d;%d\n",10*secondCount, msgCount[0],msgCount[1], burstMsgCount[0],burstMsgCount[1],fps[i]);
+                    fprintf(io,"%d;%d;%d;%d;%d;%d\n",10*secondCount, msgCount[0],msgCount[1], burstMsgCount[0],burstMsgCount[1],dataLength[i]);
                     fflush(io);
                 }
-                printf("%d;%d;%d;%d;%d;%d\n",10*secondCount, msgCount[0],msgCount[1], burstMsgCount[0],burstMsgCount[1],fps[i]);
+
+                printf("%d;%d;%d;%d;%d;%d\n",10*secondCount, msgCount[0],msgCount[1], burstMsgCount[0],burstMsgCount[1],dataLength[i]);
                 msgCount[0] = 0;
                 msgCount[1] = 0;
                 //burstByteCount[0] = 0;
@@ -257,7 +260,7 @@ OSAL_DEFINE_THREAD(testDatarate, 256, arg) {
                 burstMsgCount[1] = 0;
 
                 secondCount++;
-                if (secondCount%26==0)//360)
+                if (secondCount%10==0)//360)
                 {
                     break;
                 }
@@ -281,17 +284,24 @@ OSAL_DEFINE_THREAD(testDatarate, 256, arg) {
                     msgCount[1]+=inMsg.length;
                 }
                 if((buffers & ((uint64)0x1<<BURST_BUFFER)) &&
-                    com_get_origin(BURST_BUFFER)== 0x441)
+                    com_get_origin(BURST_BUFFER)== (0x441&0x3FF))
                 {
                     inMsg = com_read_mailbox(BURST_BUFFER, data);
                     burstMsgCount[0] += inMsg.length;
                 }
                 if((buffers & ((uint64)0x1<<BURST_BUFFER)) &&
-                        com_get_origin(BURST_BUFFER)== 0x442)
+                        com_get_origin(BURST_BUFFER)== (0x442&0x3FF))
                 {
                     inMsg = com_read_mailbox(BURST_BUFFER, data);
                     burstMsgCount[1] += inMsg.length;
                 }
+                for(uint8 i = 0; i<inMsg.length;i++)
+                    if(inMsg.data[i]!=i)
+                    {
+                        printf("content error\n");
+                        break;
+                    }
+
                 buffers = com_poll_mailbox();
             }
             com_osal_thread_sleep_us(100);

@@ -27,7 +27,7 @@ OSAL_DEFINE_THREAD(CANReceive, 256, arg) {
     MyMessage inputMessage;
 
     while(1){
-        com_osal_thread_sleep_us(50);
+        com_osal_thread_sleep_us(100);
 
         //com_osal_can_lock();
         inputMessage = com_osal_poll_CAN();
@@ -238,11 +238,12 @@ uint8 treate_burst_message(MyMessage message)
     uint8 framePointer = 0;
     static uint8 msgHeadPointer = 0;
     uint8 length;
+    uint8 tempData;
 
     static uint8 msgCount = 0;
 
     //burst does not come from a module of interest -> burst buffer not set up
-    if(com_input_buffer_get_origin(BURST_BUFFER) != message.id)
+    if(com_input_buffer_get_origin(BURST_BUFFER) != (message.id&0x3FF))
         return 1;
     //write problem with burst buffer
     if(com_input_buffer_is_blocked(BURST_BUFFER))
@@ -251,8 +252,18 @@ uint8 treate_burst_message(MyMessage message)
     if(message.length==1)
     {
         //end burst
+        msgContent.length = 1;
+        msgContent.data = &tempData;
+
+#ifdef CORE
+        if(com_input_buffer_get_left_write(BURST_BUFFER))
+            printf("Frame incomplete\n");
+        while(com_input_buffer_get_left_write(BURST_BUFFER))
+            com_input_buffer_write_data(BURST_BUFFER, msgContent);
+#endif
         com_input_buffer_block_buffer(BURST_BUFFER);
         com_input_buffer_burst_terminated(BURST_BUFFER);
+
         msgCount = 0;
         return 1;
     }

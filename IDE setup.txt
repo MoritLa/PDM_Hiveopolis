@@ -1,0 +1,90 @@
+Toolchain setup Eclipse IDE:
+- Download Eclipse IDE
+- Download msys-make and msys-tiny comand from MinGW
+- Copy binaries to Tool forlder
+
+- Download gcc cross compiler
+  - arm-linux-gnueabihf for Beagle bone and raspberry
+  - arm-none-eabi for Epuck or STM32
+
+File Structure IDE:
+HO_eclipse
+-> eclipse (contains download from Eclipse IDE)
+-> Tools
+---> gcc_arm_none_eabi (contains download form arm-none-eabi gcc compiler)
+---> gcc_arm-linux-gnueabihf (contains download from arm-linux-gnueabihf)
+---> MinGW (contains the msys/bin folder from MinGW)
+the MinGW and gcc folder each contain a bin repository, which must be added to the PATH before running the programm.
+
+Recommended File structure Hiveopolis project:
+Repository
+-> com_protocol
+-> e-puck2__main-processor
+-> core_code
+-> module_code1
+-> module_codex
+
+Compilation for projects:
+- The folders mentioned above must be added to the PATH variable before executing eclipse. This can be done using a short script
+- Project configuration when creating project:
+  - Cross GCC Command: Prefix arm-linux-gnueabihf- for RPi or arm-none-aebi- for Epuck
+  - Cross GCC Command: Path: ${eclipse_home}\..\Tools\gcc_arm-linux-gnueabihf\bin or ${eclipse_home}\..\Tools\gcc_arm_none_aebi\bin
+
+- Project configuration after creation:
+  - Properties->C/C++ Build->Settings->Tool Settings: Prefix arm-linux-gnueabihf- for RPi or arm-none-aebi- for Epuck
+  - Properties->C/C++ Build->Settings->Tool Settings: Path ${eclipse_home}\..\Tools\gcc_arm-linux-gnueabihf\bin or ${eclipse_home}\..\Tools\gcc_arm_none_aebi\bin
+
+- Makefile is automatically generated, can be switched of under Project->Properties->C/C++ Build-> Builder Settings
+- For new projects you should add the com_library folder as linked resource
+- For epuck projects you should add the e-puck2_main-processor folder as linked resource
+- For epuck projects you should not use a automatic makefile
+- Add option -r to the make call (Project->Properties->C/C++Build->Behaviour)
+- I had to add --specs=nosys.specs option for the linker in the rules.mk file of the ChibiOS to remove some errors
+- For epuck projects in your makefile, you need to define the following Variables
+  - PROJECT = "name"
+  - GLOBAL_PATH = "rel path to epuck library"
+  - COM_PATH = "rel path to com library"
+  - CSRC += "your source files"
+  - INCDIR += "your include directories"
+  - USE_OPT += -DCHIBIOS (configures the com library for CHIBIOS)
+  - include $(COM_PATH)/com.mk
+  - include $(GLOBAL_PATH)/Makefile
+- For Beaglebone projects, when using a automatically generated makefile, those parameters must be defined in Project->Properties->C/C++ Build/Settings/Tool Settings
+  - $(ProjDirPath}/../com_protocol/header (relative 
+
+Debugging for Beaglebone:
+Setup Debug Configuration:
+- Create new C/C++ Remote Application
+- set up Project and C/C++ Application
+- Connection: New:
+  - Connection Type: SSH
+    - Connection name: as you wish
+    - Host: 192.168.7.2
+    - User: debian
+    - Password based authentication:
+    - temppwd (standard password)
+    - You can use another user and Password if you like
+    - Advanced: SSH Proxy Settings: Remote 
+- Remote Absolute File Path: indicate the location on the BeagleBone where you wish to place the executable
+- Commands: chmod a+x "Remote Absolute File Path" (allow execution of your file)
+- Debugger->Main-> GDB debugger: ${eclipse_home}\..\Tools\gcc_arm-linux-gnueabihf\bin\arm-linux-gnueabihf-gdb.exe
+- create .gdbinit file in the Debug folder, containing following line: set sysroot
+- Add it Debugger->Main-> GDB command file (.gdbinit)   
+
+Configuration Beaglebone:
+- install gdbserver:
+  - apt-get update
+  - apt-get install gdbserver
+
+Debugging Epuck
+Set up Debug Configuration:
+- Create new GDB Hardware Debugging
+- set name and executable (.elf file)
+- Debugger->GDB Command: arm-none-eabi-gdb --interpreter=mi
+- Uncheck Use remote target
+- Startup->Initialization Commands Write:
+target extended-remote \\.\COMx
+monitor swdp_scan
+attach 1
+set mem inaccessible-by-default off
+- COMx is the GDB server port (Device description in DEvice manager)
