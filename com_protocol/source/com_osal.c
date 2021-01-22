@@ -44,8 +44,15 @@ uint8 com_osal_get_GPIO(void * GPIO, uint8 pin)
 {
     switch((uint32)GPIO)
     {
+    case (uint32)GPIOA: return palReadPad(GPIOA, pin); break;
+    case (uint32)GPIOB: return palReadPad(GPIOB, pin); break;
     case (uint32)GPIOC: return palReadPad(GPIOC, pin); break;
     case (uint32)GPIOD: return palReadPad(GPIOD, pin); break;
+    case (uint32)GPIOE: return palReadPad(GPIOD, pin); break;
+    case (uint32)GPIOF: return palReadPad(GPIOD, pin); break;
+    case (uint32)GPIOG: return palReadPad(GPIOD, pin); break;
+    case (uint32)GPIOH: return palReadPad(GPIOD, pin); break;
+    case (uint32)GPIOI: return palReadPad(GPIOD, pin); break;
     default: return (uint8) -1; break;
     }
 }
@@ -54,6 +61,16 @@ void com_osal_set_GPIO(void * GPIO, uint8 pin, uint8 val)
 {
     switch((uint32) GPIO)
     {
+    case (uint32)GPIOA:
+        if(val)
+            palSetPad(GPIOA,pin);
+        else
+            palClearPad(GPIOA,pin);break;
+    case (uint32)GPIOB:
+        if(val)
+            palSetPad(GPIOB,pin);
+        else
+            palClearPad(GPIOB,pin);break;
     case (uint32)GPIOC:
         if(val)
             palSetPad(GPIOC,pin);
@@ -64,6 +81,31 @@ void com_osal_set_GPIO(void * GPIO, uint8 pin, uint8 val)
             palSetPad(GPIOD,pin);
         else
             palClearPad(GPIOD,pin);break;
+    case (uint32)GPIOE:
+        if(val)
+            palSetPad(GPIOE,pin);
+        else
+            palClearPad(GPIOE,pin);break;
+    case (uint32)GPIOF:
+        if(val)
+            palSetPad(GPIOF,pin);
+        else
+            palClearPad(GPIOF,pin);break;
+    case (uint32)GPIOG:
+        if(val)
+            palSetPad(GPIOG,pin);
+        else
+            palClearPad(GPIOG,pin);break;
+    case (uint32)GPIOH:
+        if(val)
+            palSetPad(GPIOH,pin);
+        else
+            palClearPad(GPIOH,pin);break;
+    case (uint32)GPIOI:
+        if(val)
+            palSetPad(GPIOI,pin);
+        else
+            palClearPad(GPIOI,pin);break;
     default: break;
     }
 }
@@ -83,7 +125,6 @@ uint32 com_osal_get_systime_ms(void)
     return ST2MS(chVTGetSystemTime());
 }
 
-//MUTEX_DECL(canMessagesSem, 0) ;
 MUTEX_DECL(canLockMux) ;
 
 uint8 com_osal_send_CAN(MyMessage CANMessage)
@@ -99,10 +140,9 @@ uint8 com_osal_send_CAN(MyMessage CANMessage)
 
     txf.data32[0] = CANMessage.data32[0] ;
     txf.data32[1] = CANMessage.data32[1];
-    com_osal_can_lock();
 
     msg = canTransmit(&CAND1, CAN_ANY_MAILBOX, &txf, MS2ST(7));
-    com_osal_can_unlock();
+
     return msg == MSG_OK?true:false;
 }
 
@@ -196,6 +236,7 @@ bool com_osal_init(void)
     rfilter[0].can_mask = 0x000;
     setsockopt(CAN_socket, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
 
+    // set timeout
     struct timeval tv;
     tv.tv_sec = 0;
     tv.tv_usec = 7000;
@@ -308,11 +349,7 @@ uint8 com_osal_send_CAN(MyMessage sendMessage)
     frame.data[7] = sendMessage.data8[7];
 
     //6.Send message
-    //static uint16 tx = 1;
-    //printf("%d\n",tx++);
-
     nbytes = write(CAN_socket, &frame, sizeof(frame));
-    //printf("%d\n",write(CAN_socket, &frame, sizeof(frame)));
 
     if(nbytes != sizeof(frame))
         return false;
@@ -328,10 +365,6 @@ MyMessage com_osal_poll_CAN()
     memset(&frame, 0, sizeof(struct can_frame));
 
     nbBytes = read(CAN_socket, &frame, sizeof(frame));
-
-    /*static uint16 tx = 1;
-    if(nbBytes != 0)
-        printf("%d\n",tx++);*/
 
     if (nbBytes == 0 ||
         (frame.can_id&(0x1<<29)) || // no remote transmission requests

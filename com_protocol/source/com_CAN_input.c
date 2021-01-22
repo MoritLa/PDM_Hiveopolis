@@ -10,16 +10,27 @@
 #include "com_input_buffer.h"
 #include "configuration.h"
 
-static uint16 CANId = 0x7FF;
 
+// Decides to which input buffer the inputMessage must be written
 uint8 write_to_buffer(MyMessage inputMessage);
+
+// Decodes a CAN message with a high priority ID, it calls the emergencyCb function
 uint8 treat_emergency_message(MyMessage message);
+
+// Decodes non data CAN messages, it calls the protocolCb function
 uint8 treat_protocol_message(MyMessage message);
+
+// Decodes a burst message and writes the content to the right buffer
 uint8 treate_burst_message(MyMessage message);
 
+// Callback function, they can be set by the user, default function does nothing
 ComMessageCb protocolCb = &com_generic_message_cb;
 ComMessageCb emergencyCb = &com_generic_message_cb;
 
+
+static uint16 CANId = ID_NOT_SET;
+
+// This thead collects all CAN frames and writes it to a buffer
 OSAL_DEFINE_THREAD(CANReceive, 256, arg) {
 
     OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
@@ -27,31 +38,30 @@ OSAL_DEFINE_THREAD(CANReceive, 256, arg) {
     MyMessage inputMessage;
 
     while(1){
-        com_osal_thread_sleep_us(100);
+        com_osal_thread_sleep_us(50); // Approximate duration of one CAN frame
 
-        //com_osal_can_lock();
         inputMessage = com_osal_poll_CAN();
-        //com_osal_can_unlock();
-
-        //for(uint8 i=0; i<8; i++)
-        //    printf("%x ", inputMessage.data8[i]);
-        //printf("\n");
 
         if(inputMessage.id == CAN_REC_ERROR) //time out or wrong message type
             continue;
-        if(write_to_buffer(inputMessage)==2)
+        // debugging message
+        if(write_to_buffer(inputMessage)!=1)
             com_CAN_output_send_emergency_msg(0x11,inputMessage);
     }
 }
 
 void com_CAN_input_init(void)
 {
+    CANId = ID_NOT_SET;
+
     com_input_buffer_init();
 
 #ifndef CORE
+    // CORE buffer is allways active
     com_input_buffer_set_origin(CORE_BUFFER, 0x000);
     com_input_buffer_unblock_buffer(CORE_BUFFER);
 #endif
+
     OSAL_CREATE_THREAD(CANReceive,NULL, OSAL_MEDIUM_PRIO);
 
 }
@@ -76,6 +86,8 @@ uint16 com_CAN_input_get_CAN_id(void)
 {
     return CANId;
 }
+
+
 uint8 write_to_buffer(MyMessage message)
 {
     uint8 inputBufferId = 0xFF;
@@ -89,15 +101,18 @@ uint8 write_to_buffer(MyMessage message)
             inputBufferId = i;
             break;
         }
-    if(inputBufferId==0xFF)
+    if(inputBufferId==0xFF)// Id has no buffer (ignore frame)
         return 1;
 
-    if((0x400&message.id)==0)
+    if(CANId == ID_NOT_SET)
+        return 0;
+
+    if((0x400&message.id)==0) //High priority frame
         return treat_emergency_message(message);
-    else if((message.data8[0]&(0x1F<<3)) == (MOD_BURST_CONT<<3))
+    else if((message.data8[0]&(0x1F<<3)) == (MOD_BURST_CONT<<3))// burst frame
         return treate_burst_message(message);
 #ifndef CORE
-    else if(inputBufferId == CORE_BUFFER &&
+    else if(inputBufferId == CORE_BUFFER && // content frame from core
             com_input_buffer_get_left_write(inputBufferId)!=0 &&
             (((message.data8[0]&0x3)<<8)|message.data8[1])==CANId &&
             (message.data8[0]&(0x1F<<3)) == (CORE_CONT<<3))
@@ -109,7 +124,7 @@ uint8 write_to_buffer(MyMessage message)
         if(bytesWritten != message.length-1)
             return 0;
     }
-    else if(inputBufferId == CORE_BUFFER &&
+    else if(inputBufferId == CORE_BUFFER && // header message from core
             com_input_buffer_get_left_write(inputBufferId)==0 &&
             (((message.data8[0]&0x3)<<8)|message.data8[1])==CANId &&
             (message.data8[0]&(0x1F<<3)) == (CORE_HEAD<<3))
@@ -124,7 +139,7 @@ uint8 write_to_buffer(MyMessage message)
             return 0;
     }
 #endif
-    else if(com_input_buffer_get_left_write(inputBufferId)!=0 &&
+    else if(com_input_buffer_get_left_write(inputBufferId)!=0 && // content frame from other module
             ((message.data8[0]&(0x1F<<3)) == (MOD_CONT<<3)))
     {
         bufMessage.length = message.length-1;
@@ -134,7 +149,7 @@ uint8 write_to_buffer(MyMessage message)
         if(bytesWritten != message.length-1)
             return 0;
     }
-    else if(com_input_buffer_get_left_write(inputBufferId)==0 &&
+    else if(com_input_buffer_get_left_write(inputBufferId)==0 && // header frame from other module
             ((message.data8[0]&(0x1F<<3)) == (MOD_HEAD<<3)))
     {
         bufMessage.contentId = message.data8[MOD_HEAD_CONT];
@@ -157,6 +172,9 @@ uint8 write_to_buffer(MyMessage message)
 uint8 treat_emergency_message(MyMessage message)
 {
     MyMessage tempMsg;
+
+    if(CANId == ID_NOT_SET)
+        return 0;
 
     if(message.data8[0] == HEARTBEAT)
     {
@@ -197,14 +215,19 @@ uint8 treat_protocol_message(MyMessage message)
 {
     MyMessage tempMsg;
 
+    if(CANId == ID_NOT_SET)
+        return 0;
+
     switch(message.data8[0]>>3)
     {
     case CORE_HEAD:
     case CORE_CONT:
     case CORE_HS:
+        // filter frames who have destination
         if(!((((message.data8[0]&0x3)<<8)|message.data8[1])==CANId))
             return 1;
     case CORE_BURST_ACCEPT:
+        // don't filter frame, but store destination
         tempMsg.id=(((uint16)message.data8[0]&0x3)<<8)|message.data8[1];
         tempMsg.length = message.length-2;
         for(uint8 i=0; i<message.length-2;i++)
@@ -221,6 +244,7 @@ uint8 treat_protocol_message(MyMessage message)
     case MOD_FILE_CONT:
     case MOD_REG:
     case MOD_HS:
+        // treat message with no destination
         tempMsg.id=message.id;
         tempMsg.length = message.length-1;
         for(uint8 i=0; i<message.length-1;i++)
@@ -270,7 +294,7 @@ uint8 treate_burst_message(MyMessage message)
 
     for(framePointer=1;framePointer<message.length;)
     {
-        if(com_input_buffer_get_left_write(BURST_BUFFER) != 0)
+        if(com_input_buffer_get_left_write(BURST_BUFFER) != 0) // There is data left to be written
         {
             msgContent.length = message.length-framePointer;
             msgContent.data = message.data8+framePointer;
@@ -279,7 +303,7 @@ uint8 treate_burst_message(MyMessage message)
                 return 2;
             framePointer += length;
         }
-        else if(msgHeadPointer == BUS_HEAD_LEN)
+        else if(msgHeadPointer == BUS_HEAD_LEN) // All parts of the header are received
         {
             if(com_input_buffer_write_header(BURST_BUFFER,msgContent) == BUFFER_ERROR)
                 return 2;
@@ -287,6 +311,7 @@ uint8 treate_burst_message(MyMessage message)
         }
         else
         {
+            // header is incomplete and header must be compleated
             switch(msgHeadPointer)
             {
             case MOD_BURST_TIME_1:

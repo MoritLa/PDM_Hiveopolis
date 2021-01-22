@@ -14,26 +14,32 @@
 #include "com_output_buffer.h"
 
 #ifdef CORE
+// fixed framerate for choke
 static uint32 messagesSend[NB_MSG_P_S];
 static bool slotFree[NB_MSG_P_S];
 static uint8 currentSlot = 0;
 #else
+// variable framerate for choke (used for tests)
+// Can be configured via CAN bus
 static unsigned char NB_MSG_P_S = 32;
-static uint32 messagesSend[100];//NB_MSG_P_S];
-static bool slotFree[100];//NB_MSG_P_S];
+static uint32 messagesSend[MAX_FPS_CHOKE];
+static bool slotFree[MAX_FPS_CHOKE];
 static uint8 currentSlot = 0;
 #endif
 
-static uint16 CANId = 0xFFFF;
+static uint16 CANId = ID_NOT_SET;
 static bool burstActive = false;
 static bool burstAccepted = false;
 
+enum states {NO_BURST, BURST_ACCEPTED , BURST_ACTIVE};
+static uint8 state = NO_BURST;
+
+// Checks if a slot can be liberated
 void update_free_slots(void);
+// Takes a message from output buffer and transmits it
 bool fill_slot(void);
+// Writes burst messages until burst buffer is empty or BURST_LENGTH bytes are send
 uint8 write_burst(uint8 frameCount);
-
-
-uint8 value1;
 
 OSAL_DEFINE_THREAD(CANSend, 256, arg) {
 
@@ -45,7 +51,7 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
 #ifdef CORE
     for(uint8 i=0; i<NB_MSG_P_S; i++)
 #else
-    for(uint8 i=0; i<100/*NB_MSG_P_S*/; i++)
+    for(uint8 i=0; i<MAX_FPS_CHOKE; i++)
 #endif
     {
         messagesSend[i] = com_osal_get_systime_ms()-1000;
@@ -60,9 +66,14 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
         if(burstAccepted==true && (com_output_buffer_get_left_read()==0))
             burstActive = true;
 
+        //if(state == BURST_ACCEPTED && (com_output_buffer_get_left_read() == 0))
+         //   state = BURST_ACTIVE;
+
         if(burstActive == true)
+        //if(state == BURST_ACTIVE)
         {
             write_burst(frameCount);
+            //state = NO_BURST;
             burstActive = false;
             burstAccepted = false;
 
@@ -79,10 +90,12 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
 
             if((NB_MSG_P_S && slotFree[currentSlot]) ||
                 (burstAccepted)) //prevent long
+                //(state == BURST_ACCEPTED))
             {
                 if(fill_slot())
                 {
                     if(burstAccepted)
+                    //if(state==BURST_ACCEPTED)
                         frameCount++;
                     else
                     {
@@ -94,17 +107,18 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
                 }
             }
             if(!burstAccepted)
+            //if(state != BURST_ACCEPTED)
                 com_osal_thread_sleep_ms(1);
         }
-
     }
 }
 
 void com_CAN_output_init(void)
 {
-    CANId = 0xFFFF;
+    CANId = ID_NOT_SET;
     burstActive = false;
     burstAccepted = false;
+    state = NO_BURST;
 
     com_output_buffer_init();
 
@@ -120,10 +134,10 @@ void com_CAN_output_set_module_id(uint8 mod_id)
 
 bool com_CAN_output_send_msg(uint8 msgId, MyMessage msg)
 {
-    bool canTransmit = false;
     MyMessage tempMsg;
 
-    if(CANId==0xFFFF)
+    // CAN id not set
+    if(CANId==ID_NOT_SET)
         return false;
     tempMsg.id=(1<<10)|CANId;
 
@@ -134,31 +148,35 @@ bool com_CAN_output_send_msg(uint8 msgId, MyMessage msg)
     case CORE_CONT:
     case CORE_BURST_ACCEPT:
     case CORE_HS:
-        if(msg.length > 8-2)
+        // encode message with destination
+        if(msg.length > CAN_FRAME_LENGTH-PROTO_OVERHEAD_DEST)
             return false;
-        tempMsg.length = msg.length+2;
+        tempMsg.length = msg.length+PROTO_OVERHEAD_DEST;
 
         tempMsg.data8[0] =(msgId<<3) | (((uint8)(msg.id>>8))&0x3);
         tempMsg.data8[1] = (uint8)(msg.id&0xFF);
         for(uint8 i=0; i<msg.length;i++)
-            tempMsg.data8[i+2] = msg.data8[i];
+            tempMsg.data8[i+PROTO_OVERHEAD_DEST] = msg.data8[i];
 
         com_osal_can_lock();
-        canTransmit = com_osal_send_CAN(tempMsg);
+        while(!com_osal_send_CAN(tempMsg))
+            com_osal_thread_sleep_us(100);
         com_osal_can_unlock();
         break;
     case CORE_REG:
     case CORE_CHOKE:
-        if(msg.length > 8-1)
+        // encode message without destination
+        if(msg.length > CAN_FRAME_LENGTH-PROTO_OVERHEAD)
             return false;
-        tempMsg.length = msg.length+1;
+        tempMsg.length = msg.length+PROTO_OVERHEAD;
 
         tempMsg.data8[0] = msgId<<3;
         for(uint8 i=0; i<msg.length;i++)
-            tempMsg.data8[i+1] = msg.data8[i];
+            tempMsg.data8[i+PROTO_OVERHEAD] = msg.data8[i];
 
         com_osal_can_lock();
-        canTransmit = com_osal_send_CAN(tempMsg);
+        while(!com_osal_send_CAN(tempMsg))
+            com_osal_thread_sleep_us(100);
         com_osal_can_unlock();
         break;
 #else
@@ -170,26 +188,27 @@ bool com_CAN_output_send_msg(uint8 msgId, MyMessage msg)
     case MOD_FILE_CONT:
     case MOD_REG:
     case MOD_HS:
-        if(msg.length > 8-1)
+        // encode module message
+        if(msg.length > CAN_FRAME_LENGTH-PROTO_OVERHEAD)
             return false;
-        tempMsg.length = msg.length+1;
+        tempMsg.length = msg.length+PROTO_OVERHEAD;
 
         tempMsg.data8[0] = msgId<<3;
         for(uint8 i=0; i<msg.length;i++)
-            tempMsg.data8[i+1] = msg.data8[i];
+            tempMsg.data8[i+PROTO_OVERHEAD] = msg.data8[i];
         com_osal_can_lock();
-        canTransmit = com_osal_send_CAN(tempMsg);
+        while(!com_osal_send_CAN(tempMsg))
+            com_osal_thread_sleep_us(100);
         com_osal_can_unlock();
         break;
 #endif
     default: break;
     }
-    return canTransmit;
+    return true;
 }
 
 bool com_CAN_output_send_emergency_msg(uint8 msgId, MyMessage msg)
 {
-    bool canTransmit = false;
     MyMessage tempMsg;
 
     if(CANId==0xFFFF || msgId == HEARTBEAT)
@@ -197,40 +216,39 @@ bool com_CAN_output_send_emergency_msg(uint8 msgId, MyMessage msg)
     tempMsg.id=CANId & (~(1<<10));
 
 #ifdef CORE
+    //encode core emergency message
+    if(msg.length > CAN_FRAME_LENGTH-EMGCY_OVERHEAD_DEST)
+        return false;
+    tempMsg.length = msg.length+EMGCY_OVERHEAD_DEST;
 
-        if(msg.length > 8-3)
-            return false;
-        tempMsg.length = msg.length+2;
+    tempMsg.data8[0] = msgId;
+    tempMsg.data8[1] = (uint8)((msg.id>>8)&0xFF);
+    tempMsg.data8[2] = (uint8)(msg.id&0xFF);
+    for(uint8 i=0; i<msg.length;i++)
+        tempMsg.data8[i+EMGCY_OVERHEAD_DEST] = msg.data8[i];
 
-        tempMsg.data8[0] = msgId;
-        tempMsg.data8[1] = (uint8)((msg.id>>8)&0xFF);
-        tempMsg.data8[2] = (uint8)(msg.id&0xFF);
-        for(uint8 i=0; i<msg.length;i++)
-            tempMsg.data8[i+3] = msg.data8[i];
-
-        com_osal_can_lock();
-        while(!com_osal_send_CAN(tempMsg))
-            com_osal_thread_sleep_us(50);
-//        canTransmit = com_osal_send_CAN(tempMsg);
-        com_osal_can_unlock();
+    com_osal_can_lock();
+    while(!com_osal_send_CAN(tempMsg))
+        com_osal_thread_sleep_us(100);
+    com_osal_can_unlock();
 
 #else
+    //encode module emergency message
+    if(msg.length > CAN_FRAME_LENGTH-EMGCY_OVERHEAD)
+        return false;
+    tempMsg.length = msg.length+EMGCY_OVERHEAD;
 
-        if(msg.length > 8-1)
-            return false;
-        tempMsg.length = msg.length+1;
+    tempMsg.data8[0] = msgId;
+    for(uint8 i=0; i<msg.length;i++)
+        tempMsg.data8[i+EMGCY_OVERHEAD] = msg.data8[i];
 
-        tempMsg.data8[0] = msgId;
-        for(uint8 i=0; i<msg.length;i++)
-            tempMsg.data8[i+1] = msg.data8[i];
-        com_osal_can_lock();
-        while(!com_osal_send_CAN(tempMsg))
-            com_osal_thread_sleep_us(50);
-        com_osal_can_unlock();
-        //canTransmit = com_osal_send_CAN(tempMsg);
+    com_osal_can_lock();
+    while(!com_osal_send_CAN(tempMsg))
+        com_osal_thread_sleep_us(100);
+    com_osal_can_unlock();
 #endif
 
-    return canTransmit;
+    return true;
 }
 
 void com_CAN_output_burst_accepted(void)
@@ -242,6 +260,7 @@ bool com_CAN_output_get_burst_accepted(void)
 {
     return burstAccepted;
 }
+
 #ifndef CORE
 void com_CAN_output_set_fps(uint8 fps)
 {
@@ -259,15 +278,15 @@ void update_free_slots(void)
             continue;
         else
         {
-            if( (currentTime>=1000 && messagesSend[i]<=currentTime-1000) ||
-                (currentTime< 1000 && messagesSend[i]> currentTime
-                                   && messagesSend[i]< COM_OSAL_MAX_TIME-1000+currentTime))
+            if( (currentTime>=ONE_SEC && messagesSend[i]<=currentTime-ONE_SEC) ||
+                (currentTime< ONE_SEC && messagesSend[i]> currentTime
+                                      && messagesSend[i]< COM_OSAL_MAX_TIME-ONE_SEC+currentTime))
                 slotFree[i] = true;
         }
     }
 }
 
-// What happens when write fails
+// What happens when write fails?
 bool fill_slot(void)
 {
     MyMessage message;
@@ -276,7 +295,8 @@ bool fill_slot(void)
 #ifdef CORE
     static uint16 lastDestination=0;
 #endif
-    if(CANId==0xFFFF)
+
+    if(CANId==ID_NOT_SET)
         return false;
     if(!com_output_buffer_empty() || !com_output_buffer_is_blocked())
     {
@@ -289,16 +309,20 @@ bool fill_slot(void)
                 return false;
             message.data8[0] =(CORE_CONT<<3) | (((uint8)(lastDestination>>8))&0x3);
             message.data8[1] = (uint8)(lastDestination&0xFF);
+
+            //write data directly to CAN frame
             bufMessage.data = message.data8+CORE_CONT_DATA;
-            bufMessage.length = 8-CORE_CONT_DATA;
-            message.length = com_output_buffer_read_data(&bufMessage)+2;
+            bufMessage.length = CAN_FRAME_LENGTH-CORE_CONT_DATA;
+            message.length = com_output_buffer_read_data(&bufMessage)+CORE_CONT_DATA;
 #else
             message.data8[0] =(MOD_CONT<<3);
-            bufMessage.data = message.data8+MOD_CONT_DATA;
-            bufMessage.length = 8-MOD_CONT_DATA;
-            message.length = com_output_buffer_read_data(&bufMessage)+1;
-#endif
 
+            //write data directly to CAN frame
+            bufMessage.data = message.data8+MOD_CONT_DATA;
+            bufMessage.length = CAN_FRAME_LENGTH-MOD_CONT_DATA;
+            message.length = com_output_buffer_read_data(&bufMessage)+MOD_CONT_DATA;
+#endif
+            // read failed
             if(message.length == BUFFER_ERROR)
                 return false;
 
@@ -355,15 +379,16 @@ uint8 write_burst(uint8 frameCount)
     uint8 endCode = 0;
 
     tempMsg.id = CANId | (1<<10);
-    tempMsg.length = 8;
+    tempMsg.length = CAN_FRAME_LENGTH;
     tempMsg.data8[0] = MOD_BURST_CONT<<3;
 
     while(true)
     {
-        for(framePointer=1;framePointer<8;)
+        for(framePointer=1;framePointer<CAN_FRAME_LENGTH;)
         {
             if(msgHeadPointer < BUS_HEAD_LEN)
             {
+                //write header if it is not compleate
                 switch(msgHeadPointer)
                 {
                 case MOD_BURST_TIME_1:
@@ -385,7 +410,8 @@ uint8 write_burst(uint8 frameCount)
             }
             else if(com_output_buffer_get_left_read()!=0)
             {
-                msgContent.length = 8-framePointer;
+                //write data if it is missing
+                msgContent.length = CAN_FRAME_LENGTH-framePointer;
                 msgContent.data = tempMsg.data8+framePointer;
                 com_osal_can_lock();
                 framePointer += com_output_buffer_read_data(&msgContent);
@@ -393,6 +419,7 @@ uint8 write_burst(uint8 frameCount)
             }
             else
             {
+                //read header if data and header are complete
                 if(frameCount+(framePointer-1+com_output_buffer_get_next_length()+BUF_HEAD_LEN)/7>BURST_LENGTH/7 ||
                         com_output_buffer_empty())
                 {
@@ -409,31 +436,33 @@ uint8 write_burst(uint8 frameCount)
             }
         }
 
+        //send frame when it is full (8 bytes)
         if(msgHeadPointer!=0 && msgContent.length != 0)
         {
             tempMsg.length = framePointer;
-//            com_osal_send_CAN(tempMsg);
             com_osal_can_lock();
             while(!com_osal_send_CAN(tempMsg))
-                com_osal_thread_sleep_us(50);
+                com_osal_thread_sleep_us(100);
             com_osal_can_unlock();
             frameCount++;
         }
 
+        //stop writing messages, when burst is finished
         if(endCode)
             break;
 
     }
 
+    // write burst termination message
     tempMsg.length = 1;
 
     com_osal_can_lock();
     while(!com_osal_send_CAN(tempMsg))
-        com_osal_thread_sleep_us(50);
+        com_osal_thread_sleep_us(100);
     com_osal_can_unlock();
 
-    com_osal_thread_sleep_ms(1);
 
+    com_osal_thread_sleep_ms(1);
     com_output_buffer_burst_terminated();
 
     return endCode-1;

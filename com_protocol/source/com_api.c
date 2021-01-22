@@ -80,13 +80,13 @@ bool com_get_burst_pending(uint8 mailbox)
 
 uint8 com_open_mailbox(uint16 origin)
 {
+    //return com_main_register_module(origin);
     uint8 mailbox = NO_MAILBOX;
 
     for(uint8 i=0; i<NB_MODULES; i++)
-    {
-        if(com_input_buffer_get_origin(i)==(origin&0x3FF))
+        if(com_input_buffer_get_origin(i)==(origin&0x3FF) &&
+                com_input_buffer_get_origin(i) != ID_NOT_SET)
             return i;
-    }
 
     //select available mailbox
     for(uint8 i=0; i<NB_MODULES; i++)

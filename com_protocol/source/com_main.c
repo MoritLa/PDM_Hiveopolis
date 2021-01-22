@@ -11,13 +11,20 @@
 #include "com_input_buffer.h"
 #include "com_osal.h"
 
-#ifndef CORE
-bool burstRequested = false;
-#endif
+//#ifndef CORE
+//bool burstRequested = false;
+//#endif
 
+// Reads address pins to define Module Id, for core default is 0
 void setup_CAN_id(void);
+
+// Callback function for protocol messages
 void input_msg_callback(uint8 msgId, MyMessage msg);
 
+#ifdef CORE
+enum states {NO_BURST, BURST_ACTIVE};
+static uint8 state = NO_BURST;
+#endif
 
 #ifdef CORE
 OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
@@ -31,14 +38,12 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
     while(true)
     {
         if(burstActive)
+        //if(state == BURST_ACTIVE)
         {
             if(!com_input_buffer_get_burst_request(BURST_BUFFER))
             {
                 burstActive = false;
-
-                //printf("burst_terminated\n");
-                //com_osal_thread_sleep_ms(93);
-
+                // state = NO_BURST;
                 //currentBurst=(currentBurst+1)%NB_MODULES;
             }
             else
@@ -58,8 +63,9 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
 
                     if(!com_CAN_output_send_msg(CORE_BURST_ACCEPT,tempMsg))
                         break;
-                    //printf("burst activated\n");
+
                     burstActive = true;
+                    //state = BURST_ACTIVE;
                     com_input_buffer_burst_requested(BURST_BUFFER);
                     com_input_buffer_burst_terminated(currentBurst);
                     com_input_buffer_unblock_buffer(BURST_BUFFER);
@@ -68,7 +74,8 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
                 //currentBurst=(currentBurst+1)%NB_MODULES;
             }
             if(burstActive)
-                com_osal_thread_sleep_ms( 25 /*570 490 430 22*/); //guarantee 1024bytes of burst content (146 messages)+25%
+            //if(state == BURST_ACTIVE)
+                com_osal_thread_sleep_ms(BURST_PERIOD);
             else
                 com_osal_thread_sleep_ms(10);
         }
@@ -112,7 +119,9 @@ void com_main_init(void)
 
     tempMsg.length = 0;
 
+
 #ifdef CORE
+    state = NO_BURST;
     while(!com_CAN_output_send_msg(CORE_REG,tempMsg))
         com_osal_thread_sleep_ms(1);
     com_output_buffer_unblock_buffer();
@@ -134,7 +143,8 @@ uint8 com_main_register_module(uint16 origin)
     uint8 mailbox = NO_MAILBOX;
 
      for(uint8 i=0; i<NB_MODULES; i++)
-         if(com_input_buffer_get_origin(i)==origin)
+         if(com_input_buffer_get_origin(i)==(origin&0x3FF) &&
+             com_input_buffer_get_origin(i) != ID_NOT_SET)
              return i;
 
      //select available mailbox

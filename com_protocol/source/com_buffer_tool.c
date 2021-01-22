@@ -4,17 +4,22 @@
  *  Created on: 10.12.2020
  *      Author: morit
  *
- *  Addapted from:
+ *  Adapted from:
  *  https://gist.github.com/ryankurte/61f95dc71133561ed055ff62b33585f8
  */
 
 #include "com_buffer_tool.h"
 
+// Reads a number of bytes from the buffer (removes it from FIFO)
 uint8 queue_read(queue_t *queue, uint8 nbBytes, uint8* data);
+// Reads a number of bytes with an offset from the start (leaves data in FIFO
 uint8 queue_scan(queue_t * queue, uint8 nbBytes, uint8 offset, uint8* data);
+// Writes a number of bytes to the buffer
 uint8 queue_write(queue_t *queue, uint8 nbBytes, uint8* data);
 
+//Removes a number of bytes from the end of the buffer
 uint8 reset_write(queue_t *queue, uint8 nbBytes);
+//Returns a number of bytes to the beginning from the FIFO
 uint8 reset_read(queue_t *queue, uint8 nbBytes);
 
 void com_buffer_tools_init_queue(queue_t* queue, size_t bufSize, uint8* buffer)
@@ -33,7 +38,7 @@ void com_buffer_tools_init_queue(queue_t* queue, size_t bufSize, uint8* buffer)
     queue->lastOpsLength[IN] = 0;
     queue->lastOpsLength[OUT] = 0;
 
-    queue->origin = 0x7FF;
+    queue->origin = ID_NOT_SET;
     queue->blocked = true;
     queue->burstPending = false;
 }
@@ -49,17 +54,18 @@ void com_buffer_tools_clear_buffer(queue_t* queue)
 
 uint8 com_buffer_tool_write_message(queue_t * queue, ComMessage message)
 {
-    //*lastWrite=0;
+    // Info for undo function
     queue->lastOpsLength[IN] = 0;
     queue->lastOpsType[IN] = MESSAGE_OPS;
 
+    // Too long messages are not allowed
     if(message.length == BUFFER_ERROR)
         return BUFFER_ERROR;
 
-    if( queue->blocked == true ||
-        queue->dataLeft[IN] != 0 ||/*dataLeft[IN] != 0 ||*/
-        (queue->size-queue->filledBytes < (uint8)(BUF_HEAD_LEN+message.length)) ||
-        !queue_write(queue, sizeof(message.contentId), &message.contentId))
+    if( queue->blocked == true || // Buffer is blocked
+        queue->dataLeft[IN] != 0 || // There is data left to write
+        (queue->size-queue->filledBytes < (uint8)(BUF_HEAD_LEN+message.length)) || // No space left in buffer
+        !queue_write(queue, sizeof(message.contentId), &message.contentId)) // Write of content Id failes
         return BUFFER_ERROR;
     else if(!queue_write(queue, sizeof(message.timestamp), (uint8*) &message.timestamp))
     {
@@ -85,7 +91,6 @@ uint8 com_buffer_tool_write_message(queue_t * queue, ComMessage message)
     }
     else
     {
-        //*lastWrite = message.length+BUF_HEAD_LEN;
         queue->lastOpsLength[IN] = message.length+BUF_HEAD_LEN;
         return message.length;
     }
@@ -93,13 +98,17 @@ uint8 com_buffer_tool_write_message(queue_t * queue, ComMessage message)
 
 uint8 com_buffer_tool_write_header(queue_t * queue, ComMessage message)
 {
-    //*lastWrite = 0;
+    //Info for undo function
     queue->lastOpsLength[IN] = 0;
     queue->lastOpsType[IN] = HEAD_OPS;
 
-    if( queue->blocked == true ||
-        queue->dataLeft[IN] != 0 ||/*dataLeft[IN] != 0 ||*/
-        (queue->size-queue->filledBytes < (uint8)(BUF_HEAD_LEN)) ||
+    // Too long messages are not allowed
+    if(message.length == BUFFER_ERROR)
+        return BUFFER_ERROR;
+
+    if( queue->blocked == true || // Buffer is blocked
+        queue->dataLeft[IN] != 0 || // There is data left to write
+        (queue->size-queue->filledBytes < (uint8)(BUF_HEAD_LEN)) || //There is not enough space in the buffer
         !queue_write(queue, sizeof(message.contentId), &message.contentId))
         return BUFFER_ERROR;
     else if(!queue_write(queue, sizeof(message.timestamp), (uint8*) &message.timestamp))
@@ -121,8 +130,6 @@ uint8 com_buffer_tool_write_header(queue_t * queue, ComMessage message)
 #endif
     else
     {
-        //dataLeft[IN] = message.length;
-        //*lastWrite = BUF_HEAD_LEN;
         queue->dataLeft[IN] = message.length;
         queue->lastOpsLength[IN] = BUF_HEAD_LEN;
 
@@ -134,16 +141,15 @@ uint8 com_buffer_tool_write_data(queue_t * queue, ComMessage message)
 {
     uint8 length = message.length;
 
+    // Infos for undo function
     queue->lastOpsLength[IN] = 0;
     queue->lastOpsType[IN] = DATA_OPS;
 
-    if( queue->dataLeft[IN] == 0/*dataLeft[IN] == 0*/)
-        return BUFFER_ERROR;
+    if( queue->dataLeft[IN] == 0)
+        return 0;
     else
     {
-        //if(length > dataLeft[IN])
-        //    length = dataLeft[IN];
-
+        // Limit input data length
         if(length > queue->dataLeft[IN])
             length = queue->dataLeft[IN];
 
@@ -152,12 +158,8 @@ uint8 com_buffer_tool_write_data(queue_t * queue, ComMessage message)
             return BUFFER_ERROR;
         else
         {
-            //dataLeft[IN] -= length;
-            //*lastWrite = length;
             queue->dataLeft[IN] -= length;
             queue->lastOpsLength[IN] = length;
-            if(queue->dataLeft[IN]>=20)
-                return BUFFER_ERROR;
             return length;
         }
     }
@@ -166,14 +168,13 @@ uint8 com_buffer_tool_write_data(queue_t * queue, ComMessage message)
 uint8 com_buffer_tool_read_message(queue_t * queue, ComMessage* message)
 {
     uint8 length = com_buffer_tool_get_next_length(queue);
-    message->length = BUFFER_ERROR;
 
-    //*lastRead = 0;
+    //Infos for undo function
     queue->lastOpsLength[OUT] = 0;
     queue->lastOpsType[OUT] = MESSAGE_OPS;
 
-    if( queue->dataLeft[OUT] != 0 ||//dataLeft[OUT] != 0 ||
-        (queue->filledBytes < (uint8)(BUF_HEAD_LEN+length)) ||
+    if( queue->dataLeft[OUT] != 0 || //There is data left to read
+        (queue->filledBytes < (uint8)(BUF_HEAD_LEN+length)) || // There is not enough content in the buffer
         !queue_read(queue, sizeof(message->contentId), &message->contentId))
         return BUFFER_ERROR;
     else if(!queue_read(queue, sizeof(message->timestamp), (uint8*) &message->timestamp))
@@ -200,8 +201,6 @@ uint8 com_buffer_tool_read_message(queue_t * queue, ComMessage* message)
     }
     else
     {
-        message->length = length;
-        //*lastRead = length+BUF_HEAD_LEN;
         queue->lastOpsLength[OUT] = length+BUF_HEAD_LEN;
         return length;
     }
@@ -210,10 +209,13 @@ uint8 com_buffer_tool_read_message(queue_t * queue, ComMessage* message)
 uint8 com_buffer_tool_get_next_length(queue_t * queue)
 {
     uint8 length;
-    if( queue->dataLeft[OUT] != 0 || //dataLeft[OUT] != 0 ||
+    if( queue->dataLeft[OUT] != 0 ||
             queue->filledBytes<BUF_HEAD_LEN)
         return BUFFER_ERROR;
-    queue_scan(queue, sizeof(length), sizeof(((ComMessage*)NULL)->contentId)+sizeof(((ComMessage*)NULL)->timestamp), &length);
+    queue_scan( queue,
+                sizeof(length),
+                sizeof(((ComMessage*)NULL)->contentId)+sizeof(((ComMessage*)NULL)->timestamp),
+                &length);
 
     return length;
 }
@@ -221,14 +223,13 @@ uint8 com_buffer_tool_get_next_length(queue_t * queue)
 uint8 com_buffer_tool_read_header(queue_t * queue, ComMessage* message)
 {
     uint8 length = com_buffer_tool_get_next_length(queue);
-    message->length = BUFFER_ERROR;
 
-    //*lastRead = 0;
+    // Infos for undo function
     queue->lastOpsLength[OUT] = 0;
     queue->lastOpsType[OUT] = HEAD_OPS;
 
-    if( queue->dataLeft[OUT] != 0 ||//dataLeft[OUT] != 0 ||
-        (queue->filledBytes < BUF_HEAD_LEN) ||
+    if( queue->dataLeft[OUT] != 0 || //There is data left to read
+        (queue->filledBytes < BUF_HEAD_LEN) || // There is not enough content in the buffer
         !queue_read(queue, sizeof(message->contentId), &message->contentId))
         return BUFFER_ERROR;
     else if(!queue_read(queue, sizeof(message->timestamp), (uint8*) &message->timestamp))
@@ -250,10 +251,6 @@ uint8 com_buffer_tool_read_header(queue_t * queue, ComMessage* message)
 #endif
     else
     {
-        message->length = length;
-
-        //dataLeft[OUT] = length;
-        //*lastRead = BUF_HEAD_LEN;
         queue->dataLeft[OUT] = length;
         queue->lastOpsLength[OUT] = BUF_HEAD_LEN;
 
@@ -265,16 +262,15 @@ uint8 com_buffer_tool_read_data(queue_t * queue, ComMessage* message)
 {
     uint8 length = message->length;
 
-    //*lastRead = 0;
+    // Infos for undo function
     queue->lastOpsLength[OUT] = 0;
     queue->lastOpsType[OUT] = DATA_OPS;
 
-    if( queue->dataLeft[OUT] == 0/*dataLeft[OUT] == 0*/)
-        return BUFFER_ERROR;
+    if( queue->dataLeft[OUT] == 0)
+        return 0;
     else
     {
-        //if(length > dataLeft[OUT])
-        //    length = dataLeft[OUT];
+        // limit data length
         if(length > queue->dataLeft[OUT])
             length = queue->dataLeft[OUT];
 
@@ -283,8 +279,6 @@ uint8 com_buffer_tool_read_data(queue_t * queue, ComMessage* message)
             return BUFFER_ERROR;
         else
         {
-            //dataLeft[OUT] -= length;
-            //*lastRead = length;
             queue->dataLeft[OUT] -= length;
             queue->lastOpsLength[OUT] = length;
 
@@ -300,12 +294,13 @@ uint8 com_buffer_tool_get_left(queue_t* queue, uint8 direction)
 
 bool com_buffer_tool_empty(queue_t* queue)
 {
+    // buffer is only empty if no data is left to write
     return (queue->filledBytes==0 && queue->dataLeft[IN]==0)?true:false;
 }
 
 bool com_buffer_tool_msg_available(queue_t* queue)
 {
-    if(queue->dataLeft[OUT]==0/*dataLeft[OUT]==0*/ &&
+    if(queue->dataLeft[OUT]==0 &&
         queue->filledBytes >= BUF_HEAD_LEN+com_buffer_tool_get_next_length(queue))
         return true;
     else
@@ -314,8 +309,9 @@ bool com_buffer_tool_msg_available(queue_t* queue)
 
 bool com_buffer_tool_msg_free(queue_t* queue, ComMessage message)
 {
+    // A message can only be written when the buffer is unblocked and no data is left
     if(queue->blocked == false &&
-        queue->dataLeft[IN]==0 /*dataLeft[IN]==0*/ &&
+        queue->dataLeft[IN]==0 &&
         queue->size-queue->filledBytes >= message.length+BUF_HEAD_LEN)
         return true;
     else
@@ -416,6 +412,7 @@ void com_buffer_tool_unblock_buffer(queue_t *queue)
 
 uint8 com_buffer_tool_set_origin(queue_t *queue, uint16 origin)
 {
+    // origin can only be changed if no data is left from the old origin is left or expected
     if(queue->blocked == true ||
         queue->dataLeft[IN] == 0 ||
         queue->filledBytes == 0)
@@ -428,7 +425,7 @@ uint8 com_buffer_tool_set_origin(queue_t *queue, uint16 origin)
 
 uint16 com_buffer_tool_get_origin(queue_t *queue)
 {
-    return queue->origin;
+    return queue->origin&0x3FF;
 }
 
 void com_buffer_tool_burst_requested(queue_t *queue)
@@ -466,9 +463,8 @@ uint8 queue_read(queue_t *queue, uint8 nbBytes, uint8* data)
 
 uint8 queue_scan(queue_t * queue, uint8 nbBytes, uint8 offset, uint8* data)
 {
-	if (nbBytes + offset > queue->filledBytes) {
+	if (nbBytes + offset > queue->filledBytes)
 		return false;
-	}
 
 	for(uint8 i = 0; i<nbBytes; i++)
 		data[i] = queue->data[(queue->tail+offset+i)%queue->size];
@@ -478,9 +474,9 @@ uint8 queue_scan(queue_t * queue, uint8 nbBytes, uint8 offset, uint8* data)
 
 uint8 queue_write(queue_t *queue, uint8 nbBytes, uint8* data)
 {
-    if (nbBytes > queue->size-queue->filledBytes) {
+    if (nbBytes > queue->size-queue->filledBytes)
         return false;
-    }
+
     for(uint8 i = 0; i<nbBytes; i++)
     {
     	queue->data[queue->head] = data[i];

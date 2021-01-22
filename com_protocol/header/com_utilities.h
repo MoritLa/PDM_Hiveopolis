@@ -10,10 +10,6 @@
 
 #include "configuration.h"
 #include <unistd.h>
-//#include "com_osal.h"
-
-
-
 
 //CORE module info
 #define CORE_CAN_ID     0x000
@@ -21,6 +17,12 @@
 #ifdef CORE
 #define MODULE_TYPE     0x0
 #define MODULE_ID       0x00
+
+#define BURST_PERIOD    25 //[ms] //guarantee 1024bytes of burst content (146 messages)+25%
+
+#else
+// Module info
+#define MAX_FPS_CHOKE   100
 #endif
 
 //Message IDs
@@ -48,9 +50,6 @@ enum moduleMsgID{
 
 //Message Formats
 //core
-
-//Module
-
 enum coreHeadFormat{
     CORE_HEAD_TIME=2,
     CORE_HEAD_CONT=4,
@@ -61,6 +60,7 @@ enum coreContFormat{
     CORE_CONT_DATA = 2
 };
 
+//Module
 enum modHeadFormat{
     MOD_HEAD_TIME=1,
     MOD_HEAD_CONT=3,
@@ -71,6 +71,21 @@ enum modContFormat{
     MOD_CONT_DATA = 1
 };
 
+//Burst
+enum modBurstFormat{
+    MOD_BURST_TIME_1,
+    MOD_BURST_TIME_2,
+    MOD_BURST_CONT_ID,
+    MOD_BURST_LENGTH
+};
+
+//protocol
+#define PROTO_OVERHEAD          1
+#define PROTO_OVERHEAD_DEST     2
+
+#define EMGCY_OVERHEAD          1
+#define EMGCY_OVERHEAD_DEST     3
+// Buffer definitions
 #ifndef CORE
 #ifndef NB_MODULES
     NB_MODULES = 1;
@@ -81,24 +96,21 @@ enum modContFormat{
 
 #define BURST_BUFFER    NB_MODULES
 
-enum modBurstFormat{
-    MOD_BURST_TIME_1,
-    MOD_BURST_TIME_2,
-    MOD_BURST_CONT_ID,
-    MOD_BURST_LENGTH
-};
-
 enum InOutDef{
     IN=0,
     OUT=1
 };
 #define IN_OUT_SIZE     2
 
+// Error flags
 #define BUFFER_ERROR    (uint8)(-1)
 
 #define NO_MAILBOX      0xFF
 
+#define ID_NOT_SET      0xFFF
 
+// Type definitions
+// General definition of variable sizes
 typedef unsigned long long uint64;
 typedef long long int64;
 typedef unsigned int uint32;
@@ -149,16 +161,16 @@ typedef struct {
     uint8 lastOpsLength[IN_OUT_SIZE];
     uint8 lastOpsType[IN_OUT_SIZE];
 
-    uint16 origin:11; // can only be set if buffer is blocked and empty and no data is left to be written
+    uint16 origin:12; // can only be set if buffer is blocked and empty and no data is left to be written
     uint8 blocked:1; // when buffer is blocked, no write action can be executed, unless data is left to be written
     uint8 burstPending:1;
 } queue_t;
 
-
+//Callback function format
 typedef void (*ComMessageCb)(uint8 msgId, MyMessage msg);
 void com_generic_message_cb(uint8 msg_id, MyMessage msg);
 
-
+// Header length in the buffer
 #ifdef CORE
 #define BUF_HEAD_LEN    (sizeof(((ComMessage*)NULL)->contentId)+\
                          sizeof(((ComMessage*)NULL)->timestamp)+\
@@ -171,8 +183,15 @@ void com_generic_message_cb(uint8 msg_id, MyMessage msg);
                          sizeof(((ComMessage*)NULL)->length))
 #endif
 
+//Header length on the bus
 #define BUS_HEAD_LEN    (sizeof(((ComMessage*)NULL)->contentId)+\
                          sizeof(((ComMessage*)NULL)->timestamp)+\
                          sizeof(((ComMessage*)NULL)->length))
+
+//CAN definitions
+#define CAN_FRAME_LENGTH    8
+
+//Time
+#define ONE_SEC               1000
 
 #endif /* HEADER_DEFINITION_H_ */
