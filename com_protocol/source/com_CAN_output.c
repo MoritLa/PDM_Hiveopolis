@@ -121,6 +121,41 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
 #endif
     }
 }
+#ifdef CHIBIOS
+#include "leds.h"
+BSEMAPHORE_DECL(burstIndSem, 0) ;
+BSEMAPHORE_DECL(msgIndSem, 0) ;
+
+OSAL_DEFINE_THREAD(burst_indication, 256, arg) {
+
+    OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
+    (void)arg;
+
+    while(true)
+    {
+        chBSemWait(&burstIndSem) ;
+
+        palSetPad(GPIOB, GPIOB_LED_BODY);
+        com_osal_thread_sleep_ms(200);
+        palClearPad(GPIOB, GPIOB_LED_BODY);
+    }
+}
+
+OSAL_DEFINE_THREAD(msg_indication, 256, arg) {
+
+    OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
+    (void)arg;
+
+    while(true)
+    {
+        chBSemWait(&msgIndSem) ;
+
+        palSetPad(GPIOD, GPIOD_LED_FRONT);
+        com_osal_thread_sleep_ms(100);
+        palClearPad(GPIOD, GPIOD_LED_FRONT);
+    }
+}
+#endif
 
 void com_CAN_output_init(void)
 {
@@ -129,7 +164,9 @@ void com_CAN_output_init(void)
 
     com_output_buffer_init();
 
-    OSAL_CREATE_THREAD(CANSend,NULL, OSAL_MEDIUM_PRIO);
+    OSAL_CREATE_THREAD(CANSend, NULL, OSAL_MEDIUM_PRIO);
+    OSAL_CREATE_THREAD(burst_indication, NULL, OSAL_MEDIUM_PRIO);
+    OSAL_CREATE_THREAD(msg_indication, NULL, OSAL_MEDIUM_PRIO);
 
 }
 
@@ -333,6 +370,10 @@ bool fill_slot(void)
             if(message.length == BUFFER_ERROR)
                 return false;
 
+#ifdef CHIBIOS
+            chBSemSignal(&msgIndSem) ;
+#endif
+
             com_osal_can_lock();
             canTransmit = com_osal_send_CAN(message);
             com_osal_can_unlock();
@@ -363,6 +404,10 @@ bool fill_slot(void)
             message.data8[MOD_HEAD_TIME+1] = (uint8) (bufMessage.timestamp>>8);
             message.length = MOD_HEAD_DLC;
 #endif
+
+#ifdef CHIBIOS
+            chBSemSignal(&msgIndSem) ;
+#endif
             com_osal_can_lock();
             canTransmit = com_osal_send_CAN(message);
             com_osal_can_unlock();
@@ -390,6 +435,10 @@ uint8 write_burst(uint8 frameCount)
     tempMsg.id = CANId | (1<<10);
     tempMsg.length = CAN_FRAME_LENGTH;
     tempMsg.data8[0] = MOD_BURST_CONT<<3;
+
+#ifdef CHIBIOS
+    chBSemSignal(&burstIndSem) ;
+#endif
 
     while(true)
     {

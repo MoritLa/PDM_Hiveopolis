@@ -26,8 +26,8 @@
 #include <sensors/proximity.h>
 
 
-#define MSG_LENGTH      16
-#define MSG_PERIOD      1000//[ms]
+#define MSG_LENGTH      250
+#define MSG_PERIOD      900//[ms]
 
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
@@ -35,7 +35,8 @@ CONDVAR_DECL(bus_condvar);
 
 static uint8 value = 0;
 
-static uint8 dataLength = 50;
+static uint8 overload = false;
+
 
 OSAL_DEFINE_THREAD(empty_buffer, 256, arg){
     OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
@@ -93,25 +94,22 @@ OSAL_DEFINE_THREAD(read_core, 512, arg){
 
             if(inMessage.length==1 || inMessage.contentId == 0x10)
             {
-                if(inMessage.data[0] & (1<<0))
+                overload = inMessage.data[0];
+
+                if(inMessage.data[0])
+                {
                     palClearPad(GPIOD, GPIOD_LED1);
-                else
-                    palSetPad(GPIOD, GPIOD_LED1);
-
-                if(inMessage.data[0] & (1<<1))
                     palClearPad(GPIOD, GPIOD_LED3);
-                else
-                    palSetPad(GPIOD, GPIOD_LED3);
-
-                if(inMessage.data[0] & (1<<2))
                     palClearPad(GPIOD, GPIOD_LED5);
-                else
-                    palSetPad(GPIOD, GPIOD_LED5);
-
-                if(inMessage.data[0] & (1<<3))
                     palClearPad(GPIOD, GPIOD_LED7);
+                }
                 else
+                {
+                    palSetPad(GPIOD, GPIOD_LED1);
+                    palSetPad(GPIOD, GPIOD_LED3);
+                    palSetPad(GPIOD, GPIOD_LED5);
                     palSetPad(GPIOD, GPIOD_LED7);
+                }
             }
         }
         com_osal_thread_sleep_ms(10);
@@ -151,8 +149,10 @@ int main(void)
         value = com_send_data(testing);
 
         //palTogglePad(GPIOD, GPIOD_LED_FRONT);
-
-        com_osal_thread_sleep_ms(MSG_PERIOD);
+        if(overload)
+            com_osal_thread_sleep_ms(1);
+        else
+            com_osal_thread_sleep_ms(MSG_PERIOD);
     }
     return value;
 }

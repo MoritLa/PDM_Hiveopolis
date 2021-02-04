@@ -21,16 +21,18 @@ void my_exit(int argc, void* arg)
     com_end();
 }
 
-OSAL_DEFINE_THREAD(led_handler, 256, arg) {
+OSAL_DEFINE_THREAD(overload_handler, 256, arg) {
 
     FILE* io = fopen("/tmp/pipes/pipeBack", "r");
     char line[100];
     uint8 length = 100;
-    uint8 LED[4] = {false,false,false,false};
+    uint8 overload ;
     uint16 * modules = arg;
 
     ComMessage message;
     uint8 data=0;
+
+    uint8 i=3;
 
     message.contentId = 0x10;
     message.timestamp = 0x1234;
@@ -41,18 +43,14 @@ OSAL_DEFINE_THREAD(led_handler, 256, arg) {
     {
         if(fgets(line, length, io))
         {
-            sscanf(line,"%d;%d;%d;%d",&LED[0],&LED[1],&LED[2],&LED[3]);
-            printf("Raw: %d;%d;%d;%d\n",LED[0],LED[1],LED[2],LED[3]);
+            sscanf(line,"%d",&overload);
+            printf("Raw: %d\n",overload);
 
-            data = 0;
-            for(uint8 i=0;i<4;i++)
-                data |= LED[i]<<i;
-            for(uint8 i=0; i<10;i++)
-            {
-                message.destination = modules[i];
-                printf("Dest: %d\n", message.destination);
-                com_send_data(message);
-            }
+            data = overload;
+
+            message.destination = modules[i];
+            printf("Dest: %d\n", message.destination);
+            com_send_data(message);
         }
         usleep(100000);
     }
@@ -126,7 +124,7 @@ int main(void)
 
     uint16 modules[10] = {0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a};
 
-    OSAL_CREATE_THREAD(led_handler, modules, OSAL_MEDIUM_PRIO);
+    OSAL_CREATE_THREAD(overload_handler, modules, OSAL_MEDIUM_PRIO);
 
     for(uint8 i = 0; i<10;i++)
         OSAL_CREATE_THREAD(read_buffer,&modules[i], OSAL_MEDIUM_PRIO);
