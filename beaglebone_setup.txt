@@ -1,0 +1,71 @@
+Set p9.24 and p9.26 as default can:
+(source: https://www.thomas-wedemeyer.de/beaglebone-canbus-python.html)
+"The configuration script is generated with : sudo nano /usr/bin/config_pins.sh
+In this script all necessary IO-pins can be added. For the canbus only the two pin of p9.24 & p9.26 are nedded so enter:
+
+#!/bin/bash
+config-pin p9.24 can
+config-pin p9.26 can
+
+Make the script executeable with: sudo chmod a+x /usr/bin/config_pins.sh
+
+Setup of the service configuration: sudo nano /lib/systemd/system/config_pins.service and enter:
+
+[Unit]
+Description=Enable pin configuration at startup
+After=generic-board-startup.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/config_pins.sh
+
+[Install]
+WantedBy=multi-user.target
+
+To activate the new service:
+
+sudo systemctl daemon-reload
+sudo systemctl enable config_pins.service
+
+sudo reboot"
+
+set can1 as active per default:
+(source: https://www.thomas-wedemeyer.de/beaglebone-canbus-python.html)
+"To start the CAN interface at system startup the /etc/network/interfaces configuration file can be used by adding the following lines:
+allow-hotplug can1
+ iface can1 can static
+    bitrate 1000000"
+
+Install realtime patch:
+(https://elinux.org/EBC_Exercise_36_PREEMPT_RT)
+
+This is a set of instructions for installing the RT kernel. They are an alternate way from what was shown above. They are here for completeness. No need to install again.
+
+To install a real time kernel, first see what you are currently running.
+
+> uname -a
+    Linux beaglebone 4.14.52-ti-r60 #1 SMP PREEMPT Tue Jun 26 23:02:46 UTC 2018 armv7l GNU/Linux
+Also do the following.
+
+> head /boot/uEnv.txt
+    #Docs: http://elinux.org/Beagleboard:U-boot_partitioning_layout_2.0
+    
+    uname_r=4.14.52-ti-r60
+    #uuid=
+    #dtb=
+
+Note what uname it is set to. You'll want to return to it when you are done.
+
+Now, look for a kernel with similar number.
+
+> sudo apt update
+> apt-cache search linux-image-4.14 > /tmp/search
+
+Look through /tmp/search and pick an image with -rt- in it's name.
+
+> grep 14.52 /tmp/search
+
+> sudo apt install linux-image-4.14.52-ti-rt-r60
+
+
+Mine took some 2.5 minutes.

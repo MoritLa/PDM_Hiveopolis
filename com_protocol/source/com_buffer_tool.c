@@ -201,6 +201,8 @@ uint8 com_buffer_tool_read_message(queue_t * queue, ComMessage* message)
     }
     else
     {
+        message->length = length;
+
         queue->lastOpsLength[OUT] = length+BUF_HEAD_LEN;
         return length;
     }
@@ -251,6 +253,8 @@ uint8 com_buffer_tool_read_header(queue_t * queue, ComMessage* message)
 #endif
     else
     {
+        message->length = length;
+
         queue->dataLeft[OUT] = length;
         queue->lastOpsLength[OUT] = BUF_HEAD_LEN;
 

@@ -32,19 +32,16 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
     OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
 
     uint8 currentBurst=0;
-    uint8 burstActive = false;
     MyMessage tempMsg;
 
     while(true)
     {
-        if(burstActive)
-        //if(state == BURST_ACTIVE)
+        if(state == BURST_ACTIVE)
         {
             if(!com_input_buffer_get_burst_request(BURST_BUFFER))
             {
-                burstActive = false;
-                // state = NO_BURST;
-                //currentBurst=(currentBurst+1)%NB_MODULES;
+                state = NO_BURST;
+                currentBurst=(currentBurst+1)%NB_MODULES;
             }
             else
                 com_osal_thread_sleep_ms(1);
@@ -64,20 +61,18 @@ OSAL_DEFINE_THREAD(BurstHandler, 256, arg) {
                     if(!com_CAN_output_send_msg(CORE_BURST_ACCEPT,tempMsg))
                         break;
 
-                    burstActive = true;
-                    //state = BURST_ACTIVE;
+                    state = BURST_ACTIVE;
                     com_input_buffer_burst_requested(BURST_BUFFER);
                     com_input_buffer_burst_terminated(currentBurst);
                     com_input_buffer_unblock_buffer(BURST_BUFFER);
                     break;
                 }
-                //currentBurst=(currentBurst+1)%NB_MODULES;
+                currentBurst=(currentBurst+1)%NB_MODULES;
             }
-            if(burstActive)
-            //if(state == BURST_ACTIVE)
+            if(state == BURST_ACTIVE)
                 com_osal_thread_sleep_ms(BURST_PERIOD);
             else
-                com_osal_thread_sleep_ms(10);
+                com_osal_thread_sleep_ms(1);
         }
     }
 }

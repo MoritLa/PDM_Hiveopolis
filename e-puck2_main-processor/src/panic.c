@@ -1,5 +1,6 @@
 #include <ch.h>
 #include <hal.h>
+char reasons[100];
 
 void panic_handler(const char *reason)
 {
@@ -12,6 +13,14 @@ void panic_handler(const char *reason)
 	palClearPad(GPIOD, GPIOD_LED_FRONT);
 	palClearPad(GPIOB, GPIOB_LED_BODY);
 	
+	for(char i=0; i<100;i++)
+	{
+	    if(reason[i] == '\0')
+	        break;
+	    else
+	        reasons[i] = reason[i];
+	}
+
     while (true) {
 
     }

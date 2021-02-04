@@ -10,6 +10,9 @@
 #include "com_input_buffer.h"
 #include "configuration.h"
 
+#ifdef CHIBIOS
+#include "leds.h"
+#endif
 
 // Decides to which input buffer the inputMessage must be written
 uint8 write_to_buffer(MyMessage inputMessage);
@@ -31,19 +34,23 @@ ComMessageCb emergencyCb = &com_generic_message_cb;
 static uint16 CANId = ID_NOT_SET;
 
 // This thead collects all CAN frames and writes it to a buffer
-OSAL_DEFINE_THREAD(CANReceive, 256, arg) {
+OSAL_DEFINE_THREAD(CANReceive, 512, arg) {
 
     OSAL_SET_CHANNEL_NAME(__FUNCTION__) ;
     (void)arg;
     MyMessage inputMessage;
 
     while(1){
-        com_osal_thread_sleep_us(50); // Approximate duration of one CAN frame
+        com_osal_thread_sleep_us(30); // Approximate duration of one CAN frame
 
+        //com_osal_can_lock();
         inputMessage = com_osal_poll_CAN();
+        //com_osal_can_unlock();
 
         if(inputMessage.id == CAN_REC_ERROR) //time out or wrong message type
+        {
             continue;
+        }
         // debugging message
         if(write_to_buffer(inputMessage)!=1)
             com_CAN_output_send_emergency_msg(0x11,inputMessage);
@@ -62,7 +69,7 @@ void com_CAN_input_init(void)
     com_input_buffer_unblock_buffer(CORE_BUFFER);
 #endif
 
-    OSAL_CREATE_THREAD(CANReceive,NULL, OSAL_MEDIUM_PRIO);
+    OSAL_CREATE_THREAD(CANReceive,NULL, OSAL_HIGH_PRIO);
 
 }
 
@@ -110,6 +117,7 @@ uint8 write_to_buffer(MyMessage message)
     if((0x400&message.id)==0) //High priority frame
         return treat_emergency_message(message);
     else if((message.data8[0]&(0x1F<<3)) == (MOD_BURST_CONT<<3))// burst frame
+//        return 1;
         return treate_burst_message(message);
 #ifndef CORE
     else if(inputBufferId == CORE_BUFFER && // content frame from core
@@ -281,7 +289,14 @@ uint8 treate_burst_message(MyMessage message)
 
 #ifdef CORE
         if(com_input_buffer_get_left_write(BURST_BUFFER))
+        {
+#ifdef CHIBIOS
+            palTogglePad(GPIOD, GPIOD_LED_FRONT);
+#endif
+#ifdef LINUX
             printf("Frame incomplete\n");
+#endif
+        }
         while(com_input_buffer_get_left_write(BURST_BUFFER))
             com_input_buffer_write_data(BURST_BUFFER, msgContent);
 #endif

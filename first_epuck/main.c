@@ -107,14 +107,14 @@ int main(void)
     chSysInit();
     mpu_init();
 
+    // Inits the Inter Process Communication bus.
+    messagebus_init(&bus, &bus_lock, &bus_condvar);
+
     proximity_start();
     com_init();
 
     //OSAL_CREATE_THREAD(empty_buffer, NULL, OSAL_MEDIUM_PRIO);
     OSAL_CREATE_THREAD(read_core, NULL, OSAL_MEDIUM_PRIO);
-
-    // Inits the Inter Process Communication bus.
-	messagebus_init(&bus, &bus_lock, &bus_condvar);
 
 	//uint8 data[10] = {0,1,2,3,4,5,6,7,8,9 };
 	uint8 data[255];

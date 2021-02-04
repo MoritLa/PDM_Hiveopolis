@@ -28,8 +28,6 @@ static uint8 currentSlot = 0;
 #endif
 
 static uint16 CANId = ID_NOT_SET;
-static bool burstActive = false;
-static bool burstAccepted = false;
 
 enum states {NO_BURST, BURST_ACCEPTED , BURST_ACTIVE};
 static uint8 state = NO_BURST;
@@ -60,24 +58,37 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
     currentSlot = 0;
 
     while(1){
+#ifdef CORE
+        downsample++;
+        if(downsample == 20)
+        {
+            update_free_slots();
+            downsample = 0;
+        }
+
+        if((NB_MSG_P_S && slotFree[currentSlot]))
+        {
+            if(fill_slot())
+            {
+                slotFree[currentSlot]=false;
+                messagesSend[currentSlot] = com_osal_get_systime_ms();
+                currentSlot = (currentSlot+1)%NB_MSG_P_S;
+            }
+        }
+        com_osal_thread_sleep_ms(10);
+#else
         if(currentSlot>=NB_MSG_P_S)
             currentSlot = 0;
 
-        if(burstAccepted==true && (com_output_buffer_get_left_read()==0))
-            burstActive = true;
+        if(state == BURST_ACCEPTED && (com_output_buffer_get_left_read() == 0))
+            state = BURST_ACTIVE;
 
-        //if(state == BURST_ACCEPTED && (com_output_buffer_get_left_read() == 0))
-         //   state = BURST_ACTIVE;
-
-        if(burstActive == true)
-        //if(state == BURST_ACTIVE)
+        if(state == BURST_ACTIVE)
         {
             write_burst(frameCount);
-            //state = NO_BURST;
-            burstActive = false;
-            burstAccepted = false;
+            state = NO_BURST;
 
-            com_osal_thread_sleep_ms(1);
+            //com_osal_thread_sleep_ms(1);
         }
         else
         {
@@ -89,13 +100,11 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
             }
 
             if((NB_MSG_P_S && slotFree[currentSlot]) ||
-                (burstAccepted)) //prevent long
-                //(state == BURST_ACCEPTED))
+                (state == BURST_ACCEPTED))
             {
                 if(fill_slot())
                 {
-                    if(burstAccepted)
-                    //if(state==BURST_ACCEPTED)
+                    if(state==BURST_ACCEPTED)
                         frameCount++;
                     else
                     {
@@ -106,18 +115,16 @@ OSAL_DEFINE_THREAD(CANSend, 256, arg) {
                     }
                 }
             }
-            if(!burstAccepted)
-            //if(state != BURST_ACCEPTED)
+            if(state != BURST_ACCEPTED)
                 com_osal_thread_sleep_ms(1);
         }
+#endif
     }
 }
 
 void com_CAN_output_init(void)
 {
     CANId = ID_NOT_SET;
-    burstActive = false;
-    burstAccepted = false;
     state = NO_BURST;
 
     com_output_buffer_init();
@@ -253,12 +260,12 @@ bool com_CAN_output_send_emergency_msg(uint8 msgId, MyMessage msg)
 
 void com_CAN_output_burst_accepted(void)
 {
-    burstAccepted = true;
+    state = BURST_ACCEPTED;
 }
 
 bool com_CAN_output_get_burst_accepted(void)
 {
-    return burstAccepted;
+    return state==BURST_ACCEPTED;
 }
 
 #ifndef CORE
@@ -369,6 +376,8 @@ bool fill_slot(void)
         return false;
 }
 
+uint8 value;
+
 uint8 write_burst(uint8 frameCount)
 {
     MyMessage tempMsg;
@@ -426,7 +435,7 @@ uint8 write_burst(uint8 frameCount)
                     endCode = 2;
                     break;
                 }
-                com_output_buffer_read_header(&msgContent);
+                value = com_output_buffer_read_header(&msgContent);
                 if(msgContent.length == BUFFER_ERROR)
                 {
                     endCode = 1;
@@ -446,7 +455,7 @@ uint8 write_burst(uint8 frameCount)
             com_osal_can_unlock();
             frameCount++;
         }
-
+        //com_osal_thread_sleep_us(150);
         //stop writing messages, when burst is finished
         if(endCode)
             break;

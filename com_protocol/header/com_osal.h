@@ -64,12 +64,14 @@ uint8 com_osal_get_GPIO(uint8 pin);
 #include "pthread.h"
 #include "time.h"
 
-// Thread priorities
-#define OSAL_IDLE_PRIO                          1
-#define OSAL_LOW_PRIO                           2
-#define OSAL_MEDIUM_PRIO                        50
-#define OSAL_HIGH_PRIO                          98
-#define OSAL_HIGHEST_PRIO                       99
+#include "errno.h"
+
+// Thread priorities (not possible for Linux)
+#define OSAL_IDLE_PRIO                          20//-20
+#define OSAL_LOW_PRIO                           10//-10
+#define OSAL_MEDIUM_PRIO                        0
+#define OSAL_HIGH_PRIO                          -10//10
+#define OSAL_HIGHEST_PRIO                       -20//20
 
 // Definition of a thread
 #define OSAL_DEFINE_THREAD(tname, size, arg)    static size_t POSIX_SIZE_ ## tname = size;\
@@ -81,7 +83,7 @@ uint8 com_osal_get_GPIO(uint8 pin);
                                                 pthread_attr_init(&attr);\
                                                 pthread_attr_setstacksize(&attr, POSIX_SIZE_ ## tname);\
                                                 pthread_create(&tname, &attr, tname ## _func, arg);\
-                                                pthread_setschedprio(tname, prio);}
+                                                printf("Prio: %d\n",pthread_setschedprio(tname, prio));}
 #define OSAL_SET_CHANNEL_NAME(tname)            //pthread_setname_np(pthread_self(), tname);
 
 //Time functions
